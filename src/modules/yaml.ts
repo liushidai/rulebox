@@ -34,7 +34,8 @@ export function createYamlModule({ store, auth }: Props) {
         return { error: 'config not found', code: 'CONFIG_NOT_FOUND' };
       }
 
-      ctx.set.headers['content-type'] = 'application/yaml';
+      // 使用 text/yaml，浏览器可直接查看文本，同时兼容 mihomo/clash 解析
+      ctx.set.headers['content-type'] = 'text/yaml';
       // 输出 mihomo 兼容格式：payload: [string]
       return serializeYaml(extractPayload(items));
     }, {

@@ -44,6 +44,9 @@ package-lock.json
 # rulebox data directory
 /data/
 
+# RuleBox Skill local config
+skills/rulebox/rulebox.json
+
 # IDE
 .idea/
 

@@ -175,7 +175,7 @@ describe('RuleBox 集成测试', () => {
         query: { token: VIEW_TOKEN },
       });
       expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('application/yaml');
+      expect(res.headers.get('content-type')).toBe('text/yaml');
     });
 
     test('正确 ADMIN_TOKEN 访问 API 应通过鉴权', async () => {
@@ -806,7 +806,7 @@ describe('RuleBox 集成测试', () => {
         query: { token: VIEW_TOKEN },
       });
       expect(res.status).toBe(200);
-      expect(res.headers.get('content-type')).toBe('application/yaml');
+      expect(res.headers.get('content-type')).toBe('text/yaml');
       // 验证包含 payload 字段
       expect(res.text).toContain('payload');
     });
