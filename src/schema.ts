@@ -3,6 +3,7 @@
  */
 
 import { t } from 'elysia';
+import { CONFIG_TYPES } from './lib/index';
 
 // --- 配置项结构 ---
 export const ConfigItemSchema = t.Object({
@@ -26,18 +27,15 @@ export const CreateConfigBody = t.Object({
     description: '配置名称，仅允许字母、数字、下划线和连字符',
   }),
   type: t.Enum(
-    {
-      classical: 'classical',
-      domain: 'domain',
-      ipcidr: 'ipcidr',
-    },
+    CONFIG_TYPES,
     {
       description: '配置类型：classical, domain, 或 ipcidr',
     },
   ),
   description: t.Optional(
     t.String({
-      description: '配置描述（可选）',
+      maxLength: 500,
+      description: '配置描述（可选），最多 500 字符',
     }),
   ),
 });

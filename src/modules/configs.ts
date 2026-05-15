@@ -18,6 +18,7 @@ import {
   ItemsBody,
   ConfigNamePattern,
 } from '../schema';
+import { CONFIG_TYPES } from '../lib/index';
 
 interface Props {
   store: ConfigStore;
@@ -32,10 +33,8 @@ const NameParam = t.Object({
 // 查询参数 schema
 const ListQuery = t.Object({
   type: t.Optional(
-    t.Enum({
-      classical: 'classical',
-      domain: 'domain',
-      ipcidr: 'ipcidr',
+    t.Enum(CONFIG_TYPES, {
+      description: '配置类型：classical, domain, 或 ipcidr',
     }),
   ),
 });

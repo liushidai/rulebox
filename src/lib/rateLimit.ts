@@ -113,7 +113,6 @@ export function createRateLimit(
     touchKey(ip);
 
     record.count++;
-    rateLimitMap.set(ip, record);
 
     // 检查是否超过限制
     if (record.count > maxRequests) {

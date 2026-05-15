@@ -12,9 +12,12 @@ import { createAuth } from './modules/auth';
 import { createYamlModule } from './modules/yaml';
 import { createConfigsModule } from './modules/configs';
 import { createRateLimit } from './lib/rateLimit';
+import { createBodyLimit } from './lib/bodyLimit';
+
+import type { AppConfig } from './config';
 
 // ---- 加载配置 ----
-let appConfig;
+let appConfig: AppConfig;
 try {
   appConfig = loadConfig();
 } catch (err: any) {
@@ -42,34 +45,26 @@ const auth = createAuth(appConfig);
 // ---- 创建速率限制中间件 ----
 const rateLimitMiddleware = createRateLimit();
 
+// ---- Body 大小限制常量 ----
+const BODY_LIMIT = 1024 * 1024; // 1MB（防止 DoS 攻击）
+
+// ---- 创建 bodyLimit 中间件 ----
+const bodyLimitMiddleware = createBodyLimit({ maxSize: BODY_LIMIT });
+
 // ---- 创建路由模块 ----
 const yamlModule = createYamlModule({ store, auth });
 const configsModule = createConfigsModule({ store, auth });
 
 // ---- 组装应用 ----
-const BODY_LIMIT = 1024 * 1024; // 1MB（防止 DoS 攻击）
-
 const app = new Elysia()
-  // 请求体大小限制中间件
-  // 同时检查 Content-Length 标头和实际读取字节数，防止伪造绕过
-  .onBeforeHandle(async ({ request, set }) => {
-    if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
-      // 先检查 Content-Length 标头（快速失败）
-      const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
-      if (contentLength > BODY_LIMIT) {
-        set.status = 413;
-        return {
-          error: 'payload too large',
-          code: 'PAYLOAD_TOO_LARGE',
-        };
-      }
-    }
-  })
-
-  // 速率限制
+  // 1. 速率限制（最先执行，快速拒绝恶意 IP）
+  // 排除 /health 和 /swagger 等公开端点
   .use(rateLimitMiddleware)
 
-  // Swagger: API 文档（默认关闭）
+  // 2. Body 大小限制（拦截 POST/PUT/PATCH）
+  .use(bodyLimitMiddleware)
+
+  // 3. Swagger: API 文档（默认关闭）
   .use(
     process.env.ENABLE_SWAGGER === 'true' ? swagger({
       path: '/swagger',
@@ -106,6 +101,14 @@ const app = new Elysia()
           code: 'ROUTE_NOT_FOUND',
         };
       default:
+        // 处理 store 层抛出的业务错误（如 INVALID_CONFIG_NAME）
+        if (error instanceof Error && error.message === 'INVALID_CONFIG_NAME') {
+          set.status = 400;
+          return {
+            error: 'invalid config name',
+            code: 'INVALID_CONFIG_NAME',
+          };
+        }
         set.status = 500;
         console.error(`${new Date().toISOString()} ERROR:`, error);
         return {

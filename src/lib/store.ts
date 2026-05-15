@@ -37,11 +37,18 @@ export class ConfigStore {
 
   /**
    * 启动时从 index.yaml 加载所有配置到内存
+   * 对每个 entry.name 进行安全校验，防止路径遍历
    */
   loadAll(): void {
     const entries = this.index.listAll();
 
     for (const entry of entries) {
+      // 安全校验：防止恶意篡改的 index.yaml 导致路径遍历
+      if (!/^[a-zA-Z0-9_-]+$/.test(entry.name)) {
+        console.warn(`⚠️ 跳过非法配置名: ${entry.name}`);
+        continue;
+      }
+
       const filePath = join(this.dataDir, `${entry.name}.yaml`);
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf-8');

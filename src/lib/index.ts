@@ -13,6 +13,15 @@ import { parse, stringify } from 'yaml';
 export type ConfigType = 'classical' | 'domain' | 'ipcidr';
 
 /**
+ * 配置类型常量（用于 schema 和路由定义）
+ */
+export const CONFIG_TYPES = {
+  classical: 'classical',
+  domain: 'domain',
+  ipcidr: 'ipcidr',
+} as const;
+
+/**
  * 配置条目元数据
  */
 export interface CatalogEntry {

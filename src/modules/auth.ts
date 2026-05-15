@@ -4,14 +4,17 @@
  */
 
 import type { AppConfig } from '../config';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHmac } from 'node:crypto';
 
 /**
  * 恒定时间字符串比较，防止时序攻击
+ * 使用 HMAC 固定长度比较，避免泄露长度信息
  */
 function secureCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const key = 'rulebox-hmac-key-for-token-comparison';
+  const hashA = createHmac('sha256', key).update(a).digest();
+  const hashB = createHmac('sha256', key).update(b).digest();
+  return timingSafeEqual(hashA, hashB);
 }
 
 /**
