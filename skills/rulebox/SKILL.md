@@ -1,7 +1,7 @@
 ---
 name: rulebox
 description: 管理 mihomo/clash rule-providers 规则配置，支持创建规则集、添加/删除规则项、查看配置列表和详情、修改配置描述
-metadata: {"openclaw":{"requires":{"config":["rulebox.url","rulebox.adminToken","rulebox.viewToken"]},"emoji":"📦"}}
+metadata: {"openclaw":{"requires":{"config":["url","adminToken","viewToken"]},"emoji":"📦","config_file":"skills/rulebox/rulebox.json"}}
 ---
 
 # RuleBox 规则管理
@@ -36,8 +36,21 @@ metadata: {"openclaw":{"requires":{"config":["rulebox.url","rulebox.adminToken",
 
 ## 认证
 
-- 写操作: `Authorization: Bearer {adminToken}`
-- 读取 YAML: `GET {url}/{name}.yaml?token={viewToken}`
+服务连接信息和 Token 存储在与本文件同级目录下的 `rulebox.json` 中。
+
+在使用本功能前，请确保该文件已正确配置。若配置缺失，请提示用户按以下方式填写：
+
+```json
+{
+  "url": "http://localhost:8080",
+  "adminToken": "YOUR_ADMIN_TOKEN",
+  "viewToken": "YOUR_VIEW_TOKEN"
+}
+```
+
+**请求认证方式**：
+- **写操作**：自动使用请求头 `Authorization: Bearer {adminToken}`
+- **读取 YAML**：自动在 URL 后附加查询参数 `?token={viewToken}`
 
 **type 可选值**：`classical` | `domain` | `ipcidr`
 

@@ -1,0 +1,5 @@
+{
+  "url": "http://localhost:8080",
+  "adminToken": "YOUR_ADMIN_TOKEN",
+  "viewToken": "YOUR_VIEW_TOKEN"
+}

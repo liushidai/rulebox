@@ -83,7 +83,7 @@ docker compose up -d
       - 方案 A：用户直接提供已有的 Token
       - 方案 B：AI 使用 `openssl rand -hex 16` 命令自动生成随机 Token
    
-   b. 将 Token 写入 docker compose 目录下的 `.env` 文件：
+   b. 将 Token 写入项目目录下的 `.env` 文件：
    ```env
    VIEW_TOKEN=rulebox-view-$(openssl rand -hex 16)
    ADMIN_TOKEN=rulebox-admin-$(openssl rand -hex 16)
@@ -91,20 +91,8 @@ docker compose up -d
    DATA_DIR=/data
    ENABLE_SWAGGER=false
    ```
-   
-   c. 引导用户写入 openclaw.json（推荐）：
-      ```
-      是否将连接信息写入 openclaw.json？推荐写入，这样我可以直接管理规则。
-      ```
-      
-      如果用户同意，执行：
-      ```bash
-      openclaw config set skills.entries.rulebox.config.url "http://localhost:8080"
-      openclaw config set skills.entries.rulebox.config.adminToken "$ADMIN_TOKEN"
-      openclaw config set skills.entries.rulebox.config.viewToken "$VIEW_TOKEN"
-      ```
-   
-   d. 启动服务：
+  
+   c. 启动服务：
       ```bash
       docker compose up -d
       ```
@@ -123,12 +111,29 @@ docker compose up -d
    cp -r skills/rulebox/* ~/.openclaw/workspace/skills/rulebox/
    ```
 
-2. **验证 Skill 加载**
+2. **写入 Skill 配置文件**
+   
+   **关键**：此文件用于 Agent 认证，Token 必须与上一步 `.env` 中**完全一致**。
+   
+   请在项目路径 `~/.openclaw/workspace/skills/rulebox/rulebox.json` 中创建/覆盖以下内容：
+   ```json
+   {
+     "url": "http://localhost:8080",
+     "adminToken": "<替换为步骤 2b 生成的 ADMIN_TOKEN>",
+     "viewToken": "<替换为步骤 2b 生成的 VIEW_TOKEN>"
+   }
+   ```
+
+   **执行验证**：
+   写入后，请运行 `cat ~/.openclaw/workspace/skills/rulebox/rulebox.json` 检查。
+   *确保输出结果中包含真实的随机 Token 字符串，而不是占位符文本。*
+
+3. **验证 Skill 加载**
    ```bash
    openclaw skills list
    ```
 
-3. **重启 OpenClaw 或创建新会话**
+4. **重启 OpenClaw 或创建新会话**
    ```bash
    /new
    ```
