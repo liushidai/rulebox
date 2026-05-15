@@ -1,0 +1,12 @@
+services:
+  rulebox:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - VIEW_TOKEN=${VIEW_TOKEN:-your-view-token}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-your-admin-token}
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
