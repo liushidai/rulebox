@@ -4,8 +4,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - VIEW_TOKEN=${VIEW_TOKEN:-your-view-token}
-      - ADMIN_TOKEN=${ADMIN_TOKEN:-your-admin-token}
+      # 必须在 .env 文件中设置，或使用 `docker compose --env-file .env up` 启动
+      # 未设置时服务将拒绝启动
+      - VIEW_TOKEN
+      - ADMIN_TOKEN
       - DATA_DIR=/data
     volumes:
       - ./data:/data

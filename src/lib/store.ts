@@ -15,6 +15,16 @@ export class ConfigStore {
   private index: ConfigIndex;
   private lockMap: LockMap = new LockMap();
 
+  /**
+   * 配置名安全验证：防止路径遍历攻击
+   * 仅允许字母、数字、下划线、连字符
+   */
+  private validateConfigName(name: string): void {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      throw new Error('INVALID_CONFIG_NAME');
+    }
+  }
+
   constructor(dataDir: string, index: ConfigIndex) {
     this.dataDir = dataDir;
     this.index = index;
@@ -66,6 +76,7 @@ export class ConfigStore {
    * 获取指定配置的数据项
    */
   getConfig(name: string): ConfigItem[] | undefined {
+    this.validateConfigName(name);
     return this.cache.get(name);
   }
 
@@ -73,6 +84,7 @@ export class ConfigStore {
    * 获取配置元数据
    */
   getEntry(name: string): CatalogEntry | undefined {
+    this.validateConfigName(name);
     return this.index.get(name);
   }
 
@@ -80,6 +92,7 @@ export class ConfigStore {
    * 检查配置是否存在
    */
   exists(name: string): boolean {
+    this.validateConfigName(name);
     return this.index.exists(name);
   }
 
@@ -87,6 +100,7 @@ export class ConfigStore {
    * 创建新配置（含元数据）
    */
   createConfig(name: string, type: ConfigType, description: string = ''): void {
+    this.validateConfigName(name);
     if (this.exists(name)) {
       throw new Error('CONFIG_ALREADY_EXISTS');
     }
@@ -111,6 +125,7 @@ export class ConfigStore {
    * 删除配置
    */
   deleteConfig(name: string): void {
+    this.validateConfigName(name);
     if (!this.exists(name)) {
       throw new Error('CONFIG_NOT_FOUND');
     }
@@ -129,6 +144,8 @@ export class ConfigStore {
    * 重命名配置
    */
   renameConfig(oldName: string, newName: string): void {
+    this.validateConfigName(oldName);
+    this.validateConfigName(newName);
     if (!this.exists(oldName)) {
       throw new Error('CONFIG_NOT_FOUND');
     }
@@ -139,16 +156,19 @@ export class ConfigStore {
 
     const items = this.cache.get(oldName)!;
 
-    // 1. 重命名 payload 文件
+    // 1. 先将数据写入新文件（避免缓存中间状态）
+    this.writeToFile(newName, items);
+    // 2. 再删除旧文件
     const oldPath = join(this.dataDir, `${oldName}.yaml`);
-    const newPath = join(this.dataDir, `${newName}.yaml`);
-    renameSync(oldPath, newPath);
+    if (existsSync(oldPath)) {
+      unlinkSync(oldPath);
+    }
 
-    // 2. 更新内存缓存
-    this.cache.delete(oldName);
+    // 3. 更新内存缓存（先设置新，再删除旧，保证中间不会丢失）
     this.cache.set(newName, items);
+    this.cache.delete(oldName);
 
-    // 3. 更新 index
+    // 4. 更新 index
     this.index.update(oldName, { name: newName });
   }
 
@@ -156,6 +176,7 @@ export class ConfigStore {
    * 更新配置的 description（仅修改元数据）
    */
   updateConfigDescription(name: string, description: string): void {
+    this.validateConfigName(name);
     if (!this.exists(name)) {
       throw new Error('CONFIG_NOT_FOUND');
     }
@@ -168,6 +189,7 @@ export class ConfigStore {
    * 追加数据项（带磁盘读取 + 最新覆盖去重 + 锁机制）
    */
   async addItems(name: string, newItems: ConfigItem[]): Promise<void> {
+    this.validateConfigName(name);
     await this.lockMap.acquire(name, async () => {
       // 从磁盘读取最新状态
       const filePath = join(this.dataDir, `${name}.yaml`);
@@ -206,6 +228,7 @@ export class ConfigStore {
    * 删除数据项（基于 value 匹配删除 + 锁机制）
    */
   async removeItems(name: string, itemsToRemove: string[]): Promise<void> {
+    this.validateConfigName(name);
     await this.lockMap.acquire(name, async () => {
       // 从磁盘读取最新状态
       const filePath = join(this.dataDir, `${name}.yaml`);

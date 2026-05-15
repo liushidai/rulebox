@@ -4,6 +4,15 @@
  */
 
 import type { AppConfig } from '../config';
+import { timingSafeEqual } from 'node:crypto';
+
+/**
+ * 恒定时间字符串比较，防止时序攻击
+ */
+function secureCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 /**
  * 创建鉴权检查函数
@@ -24,7 +33,7 @@ export function createAuth(config: AppConfig) {
         );
       }
 
-      if (authHeader.slice(7) !== config.ADMIN_TOKEN) {
+      if (!secureCompare(authHeader.slice(7), config.ADMIN_TOKEN)) {
         return new Response(
           JSON.stringify({ error: 'forbidden', code: 'FORBIDDEN' }),
           { status: 403, headers: { 'content-type': 'application/json' } },
@@ -37,7 +46,7 @@ export function createAuth(config: AppConfig) {
      * 返回 Response (403) 或在验证通过时返回 void
      */
     viewCheck(ctx: any): Response | void {
-      if (ctx.query?.token !== config.VIEW_TOKEN) {
+      if (!secureCompare(ctx.query?.token || '', config.VIEW_TOKEN)) {
         return new Response(
           JSON.stringify({ error: 'forbidden', code: 'FORBIDDEN' }),
           { status: 403, headers: { 'content-type': 'application/json' } },

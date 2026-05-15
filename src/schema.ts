@@ -11,6 +11,7 @@ export const ConfigItemSchema = t.Object({
   }),
   description: t.Optional(
     t.String({
+      maxLength: 500,
       description: '配置项的描述信息（可选，用于 DELETE 时可不传）',
     }),
   ),
@@ -50,7 +51,9 @@ export const RenameConfigBody = t.Object({
 
 export const UpdateDescriptionBody = t.Object({
   description: t.String({
-    description: '新的配置描述，允许空字符串',
+    minLength: 0,
+    maxLength: 500,
+    description: '新的配置描述，最多 500 字符',
   }),
 });
 

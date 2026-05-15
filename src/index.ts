@@ -3,7 +3,6 @@
  */
 
 import { Elysia } from 'elysia';
-import { cors } from '@elysiajs/cors';
 import { swagger } from '@elysiajs/swagger';
 
 import { loadConfig } from './config';
@@ -12,6 +11,7 @@ import { ConfigStore } from './lib/store';
 import { createAuth } from './modules/auth';
 import { createYamlModule } from './modules/yaml';
 import { createConfigsModule } from './modules/configs';
+import { createRateLimit } from './lib/rateLimit';
 
 // ---- 加载配置 ----
 let appConfig;
@@ -39,14 +39,35 @@ console.log(`📦 已加载 ${store.listNames().length} 个配置集`);
 // ---- 创建鉴权模块 ----
 const auth = createAuth(appConfig);
 
+// ---- 创建速率限制中间件 ----
+const rateLimitMiddleware = createRateLimit();
+
 // ---- 创建路由模块 ----
 const yamlModule = createYamlModule({ store, auth });
 const configsModule = createConfigsModule({ store, auth });
 
 // ---- 组装应用 ----
+const BODY_LIMIT = 1024 * 1024; // 1MB（防止 DoS 攻击）
+
 const app = new Elysia()
-  // CORS: 允许所有来源
-  .use(cors())
+  // 请求体大小限制中间件
+  // 同时检查 Content-Length 标头和实际读取字节数，防止伪造绕过
+  .onBeforeHandle(async ({ request, set }) => {
+    if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
+      // 先检查 Content-Length 标头（快速失败）
+      const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+      if (contentLength > BODY_LIMIT) {
+        set.status = 413;
+        return {
+          error: 'payload too large',
+          code: 'PAYLOAD_TOO_LARGE',
+        };
+      }
+    }
+  })
+
+  // 速率限制
+  .use(rateLimitMiddleware)
 
   // Swagger: API 文档（默认关闭）
   .use(

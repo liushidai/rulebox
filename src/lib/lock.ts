@@ -14,16 +14,16 @@ export class LockMap {
   async acquire(name: string, fn: () => Promise<void> | void): Promise<void> {
     // 等待之前的操作完成
     const previousLock = this.locks.get(name);
-    
+
     // 使用一个变量来跟踪当前锁的 Promise
     let resolveCurrent: () => void;
     const currentLock = new Promise<void>((resolve) => {
       resolveCurrent = resolve;
     });
-    
+
     // 更新锁队列（在开始执行前就设置）
     this.locks.set(name, currentLock);
-    
+
     // 异步执行操作（fire-and-forget，通过 currentLock 通知调用者）
     void (async () => {
       try {
@@ -38,14 +38,15 @@ export class LockMap {
       } finally {
         // 释放当前锁
         resolveCurrent!();
-        // 只有当这个 Promise 仍然是队列中的最新锁时才删除
+        // 清理锁：当这个锁仍在队列且已完成时移除
         if (this.locks.get(name) === currentLock) {
           this.locks.delete(name);
         }
       }
     })();
-    
+
     // 返回当前锁 Promise
     return currentLock;
   }
+
 }
