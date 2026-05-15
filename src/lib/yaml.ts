@@ -42,6 +42,7 @@ export function parseYaml(content: string): YamlConfig {
 export function serializeYaml(config: YamlConfig | PayloadConfig): string {
   return stringify(config, {
     lineWidth: 0, // 不折行
+    defaultStringType: 'QUOTE_SINGLE', // 强制使用单引号包裹字符串（提升兼容性）
   });
 }
 
