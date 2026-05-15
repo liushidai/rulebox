@@ -5,9 +5,11 @@
 
 响应 `Content-Type` MUST 为 `application/yaml`。
 
+输出格式 MUST 为 mihomo 兼容的纯净 `payload` 数组，仅包含 value 字符串（不含描述信息）。
+
 #### Scenario: 成功获取配置
 - **WHEN** 客户端发送 `GET /adblock.yaml?token=<valid_view_token>`
-- **THEN** 返回 200，`Content-Type: application/yaml`，body 为 `payload: [...]` 格式的 YAML
+- **THEN** 返回 200，`Content-Type: application/yaml`，body 为 `payload: ["value1", "value2", ...]` 格式的 YAML
 
 #### Scenario: 配置不存在
 - **WHEN** 请求的配置名称不存在

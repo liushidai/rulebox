@@ -5,13 +5,15 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseYaml, serializeYaml, type YamlConfig } from './yaml';
+import { parseYaml, serializeYaml, type ConfigItem, type YamlConfig } from './yaml';
 import { ConfigIndex, type CatalogEntry, type ConfigType } from './index';
+import { LockMap } from './lock';
 
 export class ConfigStore {
-  private cache: Map<string, string[]> = new Map();
+  private cache: Map<string, ConfigItem[]> = new Map();
   private dataDir: string;
   private index: ConfigIndex;
+  private lockMap: LockMap = new LockMap();
 
   constructor(dataDir: string, index: ConfigIndex) {
     this.dataDir = dataDir;
@@ -21,13 +23,6 @@ export class ConfigStore {
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
-  }
-
-  /**
-   * 获取索引实例
-   */
-  getIndex(): ConfigIndex {
-    return this.index;
   }
 
   /**
@@ -41,7 +36,7 @@ export class ConfigStore {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf-8');
         const config = parseYaml(content);
-        this.cache.set(entry.name, config.payload);
+        this.cache.set(entry.name, config.items);
       }
     }
   }
@@ -70,7 +65,7 @@ export class ConfigStore {
   /**
    * 获取指定配置的数据项
    */
-  getConfig(name: string): string[] | undefined {
+  getConfig(name: string): ConfigItem[] | undefined {
     return this.cache.get(name);
   }
 
@@ -158,52 +153,72 @@ export class ConfigStore {
   }
 
   /**
-   * 追加数据项（自动去重）
+   * 追加数据项（带磁盘读取 + 最新覆盖去重 + 锁机制）
    */
-  addItems(name: string, newItems: string[]): void {
-    const items = this.cache.get(name);
-    if (items === undefined) {
-      throw new Error('CONFIG_NOT_FOUND');
-    }
-
-    const existingSet = new Set(items);
-    let changed = false;
-
-    for (const item of newItems) {
-      if (!existingSet.has(item)) {
-        existingSet.add(item);
-        changed = true;
+  async addItems(name: string, newItems: ConfigItem[]): Promise<void> {
+    await this.lockMap.acquire(name, async () => {
+      // 从磁盘读取最新状态
+      const filePath = join(this.dataDir, `${name}.yaml`);
+      let currentItems: ConfigItem[] = [];
+      
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf-8');
+        const config = parseYaml(content);
+        currentItems = config.items;
       }
-    }
 
-    if (changed) {
-      const merged = Array.from(existingSet);
+      // 构建 value → description 映射，最新的覆盖旧的
+      const itemMap = new Map<string, string>();
+      for (const item of currentItems) {
+        itemMap.set(item.value, item.description);
+      }
+
+      // 应用新 items（覆盖重复 value 的描述）
+      for (const item of newItems) {
+        itemMap.set(item.value, item.description);
+      }
+
+      // 转换回数组
+      const merged: ConfigItem[] = Array.from(itemMap.entries()).map(([value, description]) => ({
+        value,
+        description,
+      }));
+
+      // 更新内存和磁盘
       this.cache.set(name, merged);
       this.writeToFile(name, merged);
-    }
+    });
   }
 
   /**
-   * 删除数据项（不存在的条目静默忽略）
+   * 删除数据项（基于 value 匹配删除 + 锁机制）
    */
-  removeItems(name: string, itemsToRemove: string[]): void {
-    const items = this.cache.get(name);
-    if (items === undefined) {
-      throw new Error('CONFIG_NOT_FOUND');
-    }
+  async removeItems(name: string, itemsToRemove: string[]): Promise<void> {
+    await this.lockMap.acquire(name, async () => {
+      // 从磁盘读取最新状态
+      const filePath = join(this.dataDir, `${name}.yaml`);
+      let currentItems: ConfigItem[] = [];
+      
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf-8');
+        const config = parseYaml(content);
+        currentItems = config.items;
+      }
 
-    const removeSet = new Set(itemsToRemove);
-    const filtered = items.filter((item) => !removeSet.has(item));
+      const removeSet = new Set(itemsToRemove);
+      const filtered = currentItems.filter((item) => !removeSet.has(item.value));
 
-    this.cache.set(name, filtered);
-    this.writeToFile(name, filtered);
+      // 更新内存和磁盘
+      this.cache.set(name, filtered);
+      this.writeToFile(name, filtered);
+    });
   }
 
   /**
    * 原子写入文件：先写 .tmp，再 rename
    */
-  private writeToFile(name: string, payload: string[]): void {
-    const config: YamlConfig = { payload };
+  private writeToFile(name: string, items: ConfigItem[]): void {
+    const config: YamlConfig = { items };
     const yamlContent = serializeYaml(config);
 
     const tmpPath = join(this.dataDir, `${name}.yaml.tmp`);

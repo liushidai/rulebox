@@ -8,6 +8,7 @@ import type { ConfigStore } from '../lib/store';
 import type { createAuth } from './auth';
 import type { ConfigType } from '../lib/index';
 import { validateItem } from '../lib/validator';
+import type { ConfigItem } from '../lib/yaml';
 import {
   ConfigListResponse,
   ConfigItemsResponse,
@@ -178,7 +179,7 @@ export function createConfigsModule({ store, auth }: Props) {
     // POST /api/configs/{name}/items - 追加数据项（含校验）
     .post(
       '/:name/items',
-      ({ params: { name }, body: { items } }) => {
+      async ({ params: { name }, body: { items } }) => {
         const entry = store.getEntry(name);
         if (!entry) {
           return status(404, {
@@ -187,16 +188,19 @@ export function createConfigsModule({ store, auth }: Props) {
           });
         }
 
-        const itemsArray = Array.isArray(items) ? items : [items];
+        // 校验 items 格式，确保 description 始终为字符串
+        const itemsArray: ConfigItem[] = (Array.isArray(items) ? items : [items]).map(
+          (item) => ({ value: item.value, description: item.description ?? '' }),
+        );
         const validationErrors: Array<{ index: number; value: string; reason: string }> = [];
 
         // 逐项校验
         for (let i = 0; i < itemsArray.length; i++) {
-          const result = validateItem(itemsArray[i], entry.type as ConfigType);
+          const result = validateItem(itemsArray[i].value, entry.type as ConfigType);
           if (!result.valid) {
             validationErrors.push({
               index: i,
-              value: itemsArray[i],
+              value: itemsArray[i].value,
               reason: result.error || 'Unknown error',
             });
           }
@@ -213,7 +217,7 @@ export function createConfigsModule({ store, auth }: Props) {
 
         // 校验通过，追加数据
         try {
-          store.addItems(name, itemsArray);
+          await store.addItems(name, itemsArray);
           return { added: itemsArray.length, to: name };
         } catch (err: any) {
           if (err.message === 'CONFIG_NOT_FOUND') {
@@ -249,10 +253,10 @@ export function createConfigsModule({ store, auth }: Props) {
     // DELETE /api/configs/{name}/items - 删除数据项
     .delete(
       '/:name/items',
-      ({ params: { name }, body: { items } }) => {
+      async ({ params: { name }, body: { items } }) => {
         try {
-          const itemsArray = Array.isArray(items) ? items : [items];
-          store.removeItems(name, itemsArray);
+          const itemsArray: string[] = items.map(item => item.value);
+          await store.removeItems(name, itemsArray);
           return { removed: itemsArray.length, from: name };
         } catch (err: any) {
           if (err.message === 'CONFIG_NOT_FOUND') {

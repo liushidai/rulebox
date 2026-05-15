@@ -5,7 +5,7 @@
 
 import { Elysia } from 'elysia';
 import type { ConfigStore } from '../lib/store';
-import { serializeYaml } from '../lib/yaml';
+import { extractPayload, serializeYaml } from '../lib/yaml';
 import { ConfigNamePattern } from '../schema';
 import type { createAuth } from './auth';
 
@@ -35,7 +35,8 @@ export function createYamlModule({ store, auth }: Props) {
       }
 
       ctx.set.headers['content-type'] = 'application/yaml';
-      return serializeYaml({ payload: items });
+      // 输出 mihomo 兼容格式：payload: [string]
+      return serializeYaml(extractPayload(items));
     }, {
       beforeHandle: auth.viewCheck as any,
     });
