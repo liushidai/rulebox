@@ -1,7 +1,7 @@
 ---
 name: rulebox
 description: 管理 mihomo/clash rule-providers 规则配置，支持创建规则集、添加/删除规则项、查看配置列表和详情、修改配置描述
-metadata: {"openclaw":{"requires":{"config":["url","adminToken","viewToken"]},"emoji":"📦","config_file":"skills/rulebox/rulebox.json"}}
+metadata: {"openclaw":{"emoji":"📦"}}
 ---
 
 # RuleBox 规则管理
