@@ -14,6 +14,7 @@ import {
   ConfigItemsResponse,
   CreateConfigBody,
   RenameConfigBody,
+  UpdateDescriptionBody,
   ItemsBody,
   ConfigNamePattern,
 } from '../schema';
@@ -143,6 +144,33 @@ export function createConfigsModule({ store, auth }: Props) {
       {
         params: NameParam,
         body: RenameConfigBody,
+      },
+    )
+
+    // PATCH /api/configs/{name} - 修改配置描述
+    .patch(
+      '/:name',
+      ({ params: { name }, body: { description } }) => {
+        try {
+          store.updateConfigDescription(name, description);
+          return { updated: name, description };
+        } catch (err: any) {
+          if (err.message === 'CONFIG_NOT_FOUND') {
+            return status(404, {
+              error: 'config not found',
+              code: 'CONFIG_NOT_FOUND',
+            });
+          }
+          throw err;
+        }
+      },
+      {
+        params: NameParam,
+        body: UpdateDescriptionBody,
+        response: {
+          200: t.Object({ updated: t.String(), description: t.String() }),
+          404: t.Object({ error: t.String(), code: t.String() }),
+        },
       },
     )
 

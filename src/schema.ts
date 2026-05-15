@@ -48,6 +48,12 @@ export const RenameConfigBody = t.Object({
   }),
 });
 
+export const UpdateDescriptionBody = t.Object({
+  description: t.String({
+    description: '新的配置描述，允许空字符串',
+  }),
+});
+
 // --- 数据项验证 ---
 export const ItemsBody = t.Object({
   items: t.Array(ConfigItemSchema, {

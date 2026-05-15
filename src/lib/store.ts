@@ -153,6 +153,18 @@ export class ConfigStore {
   }
 
   /**
+   * 更新配置的 description（仅修改元数据）
+   */
+  updateConfigDescription(name: string, description: string): void {
+    if (!this.exists(name)) {
+      throw new Error('CONFIG_NOT_FOUND');
+    }
+
+    // 只更新 index.yaml 中的元数据，不触及 payload yaml 文件
+    this.index.update(name, { description });
+  }
+
+  /**
    * 追加数据项（带磁盘读取 + 最新覆盖去重 + 锁机制）
    */
   async addItems(name: string, newItems: ConfigItem[]): Promise<void> {

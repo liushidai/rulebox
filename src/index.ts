@@ -48,9 +48,9 @@ const app = new Elysia()
   // CORS: 允许所有来源
   .use(cors())
 
-  // Swagger: API 文档
+  // Swagger: API 文档（默认关闭）
   .use(
-    swagger({
+    process.env.ENABLE_SWAGGER === 'true' ? swagger({
       path: '/swagger',
       documentation: {
         info: {
@@ -59,7 +59,7 @@ const app = new Elysia()
           description: 'mihomo/clash rule-providers YAML 托管服务',
         },
       },
-    }),
+    }) : undefined,
   )
 
   // 请求日志
@@ -107,6 +107,8 @@ app.listen(appConfig.PORT);
 console.log(
   `🦊 RuleBox is running at http://localhost:${appConfig.PORT}`,
 );
-console.log(
-  `📖 Swagger docs at http://localhost:${appConfig.PORT}/swagger`,
-);
+if (process.env.ENABLE_SWAGGER === 'true') {
+  console.log(
+    `📖 Swagger docs at http://localhost:${appConfig.PORT}/swagger`,
+  );
+}
