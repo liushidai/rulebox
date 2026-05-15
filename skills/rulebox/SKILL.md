@@ -27,11 +27,11 @@ metadata: {"openclaw":{"requires":{"config":["rulebox.url","rulebox.adminToken",
 |------|------|------|--------|
 | 查看配置列表 | GET | `{url}/api/configs` | - |
 | 查看配置详情 | GET | `{url}/api/configs/{name}/items` | - |
-| 创建配置集 | POST | `{url}/api/configs` | `{"name", "type", "description"}` |
-| 添加规则 | POST | `{url}/api/configs/{name}/items` | `{"items": [{"value", "description"}]}` |
-| 移除规则 | DELETE | `{url}/api/configs/{name}/items` | `{"items": [{"value"}]}` |
-| 修改描述 | PATCH | `{url}/api/configs/{name}` | `{"description"}` |
-| 重命名 | PATCH | `{url}/api/configs/{name}/rename` | `{"newName"}` |
+| 创建配置集 | POST | `{url}/api/configs` | `{"name" (必填), "type" (必填), "description" (选填)}` |
+| 添加规则 | POST | `{url}/api/configs/{name}/items` | `{"items": [{"value" (必填), "description" (选填)}]}` |
+| 移除规则 | DELETE | `{url}/api/configs/{name}/items` | `{"items": [{"value" (必填)}]}` |
+| 修改描述 | PATCH | `{url}/api/configs/{name}` | `{"description" (必填)}` |
+| 重命名 | PATCH | `{url}/api/configs/{name}/rename` | `{"newName" (必填)}` |
 | 删除配置 | DELETE | `{url}/api/configs/{name}` | - |
 
 ## 认证
@@ -58,22 +58,7 @@ metadata: {"openclaw":{"requires":{"config":["rulebox.url","rulebox.adminToken",
 - 配置名仅允许字母、数字、下划线和连字符（`a-zA-Z0-9_-`）
 - 追加规则时如果 value 已存在，会用新 description 覆盖旧描述
 - 描述可以为空字符串 `""`，表示清空
-- 删除不存在的规则项静默忽略"
-```
-
-## 错误处理指南
-
-| 状态码 | 含义 | 处理方式 |
-|--------|------|----------|
-| 400 | 请求格式错误 | 检查请求体格式，告知用户具体错误字段 |
-| 401/403 | Token 无效 | 提示用户检查 adminToken 配置是否正确 |
-| 404 | 配置不存在 | 提示用户配置不存在，建议先创建配置 |
-| 409 | 配置已存在 | 提示用户配置名已被占用 |
-| 网络错误 | 无法连接 | 提示用户检查 RuleBox 服务地址和运行状态 |
-
-## 注意事项
-
-- 配置名仅允许字母、数字、下划线和连字符（`a-zA-Z0-9_-`）
-- 描述可以为空字符串 `""`，表示清空描述
+- 删除不存在的规则项静默忽略
+- **多必填参数处理**：当接口有多个必填参数时（如创建配置集需要 `name` 和 `type`），必须提示用户提供所有必填参数，不允许设置默认值
 - 添加规则时，如果格式不符合配置类型，会返回 400 错误
 - 删除不存在的规则项不会报错，静默忽略
