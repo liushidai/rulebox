@@ -1,17 +1,22 @@
 /**
  * ConfigStore - 内存缓存 + 文件系统原子操作
+ * 与 ConfigIndex 协同工作，管理配置数据和元数据
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml, serializeYaml, type YamlConfig } from './yaml';
+import { ConfigIndex, type CatalogEntry, type ConfigType } from './index';
 
 export class ConfigStore {
   private cache: Map<string, string[]> = new Map();
   private dataDir: string;
+  private index: ConfigIndex;
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, index: ConfigIndex) {
     this.dataDir = dataDir;
+    this.index = index;
+
     // 确保数据目录存在
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
@@ -19,25 +24,47 @@ export class ConfigStore {
   }
 
   /**
-   * 启动时全量加载 DATA_DIR 下所有 .yaml 文件到内存
+   * 获取索引实例
+   */
+  getIndex(): ConfigIndex {
+    return this.index;
+  }
+
+  /**
+   * 启动时从 index.yaml 加载所有配置到内存
    */
   loadAll(): void {
-    const files = readdirSync(this.dataDir).filter((f) => f.endsWith('.yaml'));
+    const entries = this.index.listAll();
 
-    for (const file of files) {
-      const name = file.replace(/\.yaml$/, '');
-      const filePath = join(this.dataDir, file);
-      const content = readFileSync(filePath, 'utf-8');
-      const config = parseYaml(content);
-      this.cache.set(name, config.payload);
+    for (const entry of entries) {
+      const filePath = join(this.dataDir, `${entry.name}.yaml`);
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf-8');
+        const config = parseYaml(content);
+        this.cache.set(entry.name, config.payload);
+      }
     }
   }
 
   /**
-   * 获取配置名称列表
+   * 获取配置名称列表（从 index 获取）
    */
   listNames(): string[] {
-    return Array.from(this.cache.keys());
+    return this.index.listAll().map((entry) => entry.name);
+  }
+
+  /**
+   * 获取所有配置元数据
+   */
+  listEntries(): CatalogEntry[] {
+    return this.index.listAll();
+  }
+
+  /**
+   * 按类型筛选配置
+   */
+  filterByType(type: ConfigType): CatalogEntry[] {
+    return this.index.findByType(type);
   }
 
   /**
@@ -48,56 +75,86 @@ export class ConfigStore {
   }
 
   /**
-   * 检查配置是否存在
+   * 获取配置元数据
    */
-  exists(name: string): boolean {
-    return this.cache.has(name);
+  getEntry(name: string): CatalogEntry | undefined {
+    return this.index.get(name);
   }
 
   /**
-   * 创建空配置
+   * 检查配置是否存在
    */
-  createConfig(name: string): void {
-    if (this.cache.has(name)) {
+  exists(name: string): boolean {
+    return this.index.exists(name);
+  }
+
+  /**
+   * 创建新配置（含元数据）
+   */
+  createConfig(name: string, type: ConfigType, description: string = ''): void {
+    if (this.exists(name)) {
       throw new Error('CONFIG_ALREADY_EXISTS');
     }
 
-    this.cache.set(name, []);
+    // 1. 先写 payload yaml 文件（原子写入）
     this.writeToFile(name, []);
+
+    // 2. 写入内存缓存
+    this.cache.set(name, []);
+
+    // 3. 更新 index（原子写入）
+    const entry: CatalogEntry = {
+      name,
+      type,
+      description,
+      created_at: new Date().toISOString(),
+    };
+    this.index.add(entry);
   }
 
   /**
    * 删除配置
    */
   deleteConfig(name: string): void {
-    if (!this.cache.has(name)) {
+    if (!this.exists(name)) {
       throw new Error('CONFIG_NOT_FOUND');
     }
 
+    // 1. 删除内存缓存
     this.cache.delete(name);
+
+    // 2. 删除文件
     this.deleteFile(name);
+
+    // 3. 更新 index
+    this.index.remove(name);
   }
 
   /**
    * 重命名配置
    */
   renameConfig(oldName: string, newName: string): void {
-    if (!this.cache.has(oldName)) {
+    if (!this.exists(oldName)) {
       throw new Error('CONFIG_NOT_FOUND');
     }
 
-    if (this.cache.has(newName)) {
+    if (this.exists(newName)) {
       throw new Error('CONFIG_ALREADY_EXISTS');
     }
 
     const items = this.cache.get(oldName)!;
-    this.cache.delete(oldName);
-    this.cache.set(newName, items);
 
-    // 原子重命名文件
+    // 1. 重命名 payload 文件
     const oldPath = join(this.dataDir, `${oldName}.yaml`);
     const newPath = join(this.dataDir, `${newName}.yaml`);
     renameSync(oldPath, newPath);
+
+    // 2. 更新内存缓存
+    this.cache.delete(oldName);
+    this.cache.set(newName, items);
+
+    // 3. 更新 index
+    this.index.update(oldName, { name: newName });
   }
 
   /**

@@ -7,6 +7,7 @@ import { cors } from '@elysiajs/cors';
 import { swagger } from '@elysiajs/swagger';
 
 import { loadConfig } from './config';
+import { ConfigIndex } from './lib/index';
 import { ConfigStore } from './lib/store';
 import { createAuth } from './modules/auth';
 import { createYamlModule } from './modules/yaml';
@@ -21,8 +22,17 @@ try {
   process.exit(1);
 }
 
-// ---- 初始化数据存储 ----
-const store = new ConfigStore(appConfig.DATA_DIR);
+// ---- 初始化索引和数据存储 ----
+const index = new ConfigIndex(appConfig.DATA_DIR);
+try {
+  index.load();
+  console.log(`📇 已加载 ${index.listAll().length} 个配置索引`);
+} catch (err: any) {
+  console.error(`❌ 索引加载失败: ${err.message}`);
+  process.exit(1);
+}
+
+const store = new ConfigStore(appConfig.DATA_DIR, index);
 store.loadAll();
 console.log(`📦 已加载 ${store.listNames().length} 个配置集`);
 

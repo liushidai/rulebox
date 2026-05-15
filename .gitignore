@@ -43,3 +43,14 @@ package-lock.json
 
 # rulebox data directory
 /data/
+
+# IDE
+.idea/
+
+# Agent skills and tool config
+.agents/
+.opencode/
+skills-lock.json
+
+# Local env files
+.env

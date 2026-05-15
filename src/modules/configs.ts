@@ -6,6 +6,8 @@
 import { Elysia, t, status } from 'elysia';
 import type { ConfigStore } from '../lib/store';
 import type { createAuth } from './auth';
+import type { ConfigType } from '../lib/index';
+import { validateItem } from '../lib/validator';
 import {
   ConfigListResponse,
   ConfigItemsResponse,
@@ -25,28 +27,50 @@ const NameParam = t.Object({
   name: t.String({ pattern: ConfigNamePattern.source }),
 });
 
+// 查询参数 schema
+const ListQuery = t.Object({
+  type: t.Optional(
+    t.Enum({
+      classical: 'classical',
+      domain: 'domain',
+      ipcidr: 'ipcidr',
+    }),
+  ),
+});
+
 export function createConfigsModule({ store, auth }: Props) {
   return new Elysia({ name: 'configs-routes', prefix: '/api/configs' })
     .guard({
       beforeHandle: auth.adminCheck as any,
     })
+
+    // GET /api/configs - 列表（支持 ?type= 筛选）
     .get(
       '/',
-      () => {
-        return { configs: store.listNames() };
+      ({ query }) => {
+        if (query.type) {
+          const entries = store.filterByType(query.type as ConfigType);
+          return { configs: entries };
+        }
+        return { configs: store.listEntries() };
       },
       {
+        query: ListQuery,
         response: { 200: ConfigListResponse },
       },
     )
 
-    // POST /api/configs - 新增
+    // POST /api/configs - 新增（含 type/description）
     .post(
       '/',
-      ({ body: { name } }) => {
+      ({ body: { name, type, description } }) => {
         try {
-          store.createConfig(name);
-          return status(201, { created: name });
+          store.createConfig(name, type as ConfigType, description || '');
+          return status(201, {
+            created: name,
+            type,
+            description: description || '',
+          });
         } catch (err: any) {
           if (err.message === 'CONFIG_ALREADY_EXISTS') {
             return status(409, {
@@ -60,7 +84,11 @@ export function createConfigsModule({ store, auth }: Props) {
       {
         body: CreateConfigBody,
         response: {
-          201: t.Object({ created: t.String() }),
+          201: t.Object({
+            created: t.String(),
+            type: t.String(),
+            description: t.String(),
+          }),
           409: t.Object({ error: t.String(), code: t.String() }),
         },
       },
@@ -117,20 +145,26 @@ export function createConfigsModule({ store, auth }: Props) {
       },
     )
 
-    // GET /api/configs/{name}/items - 获取数据项
+    // GET /api/configs/{name}/items - 获取数据项（含元数据）
     .get(
       '/:name/items',
       ({ params: { name } }) => {
-        const items = store.getConfig(name);
-
-        if (items === undefined) {
+        const entry = store.getEntry(name);
+        if (!entry) {
           return status(404, {
             error: 'config not found',
             code: 'CONFIG_NOT_FOUND',
           });
         }
 
-        return { name, items };
+        const items = store.getConfig(name) || [];
+        return {
+          name: entry.name,
+          type: entry.type,
+          description: entry.description,
+          created_at: entry.created_at,
+          items,
+        };
       },
       {
         params: NameParam,
@@ -141,12 +175,44 @@ export function createConfigsModule({ store, auth }: Props) {
       },
     )
 
-    // POST /api/configs/{name}/items - 追加数据项
+    // POST /api/configs/{name}/items - 追加数据项（含校验）
     .post(
       '/:name/items',
       ({ params: { name }, body: { items } }) => {
+        const entry = store.getEntry(name);
+        if (!entry) {
+          return status(404, {
+            error: 'config not found',
+            code: 'CONFIG_NOT_FOUND',
+          });
+        }
+
+        const itemsArray = Array.isArray(items) ? items : [items];
+        const validationErrors: Array<{ index: number; value: string; reason: string }> = [];
+
+        // 逐项校验
+        for (let i = 0; i < itemsArray.length; i++) {
+          const result = validateItem(itemsArray[i], entry.type as ConfigType);
+          if (!result.valid) {
+            validationErrors.push({
+              index: i,
+              value: itemsArray[i],
+              reason: result.error || 'Unknown error',
+            });
+          }
+        }
+
+        // 如果有校验失败，返回详细错误信息
+        if (validationErrors.length > 0) {
+          return status(400, {
+            error: `Invalid items found at indices: ${validationErrors.map((e) => e.index).join(', ')}`,
+            code: 'VALIDATION_FAILED',
+            details: validationErrors,
+          });
+        }
+
+        // 校验通过，追加数据
         try {
-          const itemsArray = Array.isArray(items) ? items : [items];
           store.addItems(name, itemsArray);
           return { added: itemsArray.length, to: name };
         } catch (err: any) {
@@ -162,6 +228,21 @@ export function createConfigsModule({ store, auth }: Props) {
       {
         params: NameParam,
         body: ItemsBody,
+        response: {
+          200: t.Object({ added: t.Number(), to: t.String() }),
+          400: t.Object({
+            error: t.String(),
+            code: t.String(),
+            details: t.Array(
+              t.Object({
+                index: t.Number(),
+                value: t.String(),
+                reason: t.String(),
+              }),
+            ),
+          }),
+          404: t.Object({ error: t.String(), code: t.String() }),
+        },
       },
     )
 
