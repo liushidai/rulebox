@@ -1,0 +1,18 @@
+[tools]
+bun = "1"
+
+[tasks.install]
+description = "安装项目依赖"
+run = "bun install"
+
+[tasks.dev]
+description = "启动本地开发服务器"
+run = "bun run --watch src/index.ts"
+
+[tasks.test]
+description = "运行项目测试"
+run = "bun test"
+
+[tasks.start]
+description = "启动项目"
+run = "bun run src/index.ts"
