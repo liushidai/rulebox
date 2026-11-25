@@ -1,134 +1,180 @@
-import { Elysia } from 'elysia';
+/**
+ * 按客户端 IP 的请求限流
+ * 以全局 onRequest 钩子运行，在解析请求体与鉴权之前快速拒绝超限请求
+ */
 
-/** 限流配置参数 */
-interface RateLimitOptions {
-  windowMs: number;     // 时间窗口（毫秒）
-  maxRequests: number;  // 每个窗口内最大请求数
-  maxKeys: number;      // LRU 最大键数量
+/** 限流可调参数（默认值仅供生产使用，测试可调小） */
+export interface RateLimitOptions {
+  /** 时间窗口（毫秒），默认 15000 */
+  windowMs?: number;
+  /** 每个窗口内允许的受计数请求数，默认 100 */
+  maxRequests?: number;
+  /** 同时跟踪的客户端 IP 上限，默认 1000 */
+  maxKeys?: number;
+  /** 是否采信 X-Forwarded-For 的最后一项，默认 false */
+  trustProxy?: boolean;
+  /** 当前时间函数，仅用于测试注入 */
+  now?: () => number;
+  /** 客户端 IP 解析函数，仅用于测试注入或特殊部署环境 */
+  clientIP?: (request: Request, server: ServerLike | null) => string;
+  /** 拒绝请求时的日志回调，由装配层注入 */
+  onReject?: (request: Request, status: number) => void;
+}
+
+/** 仅声明本模块用到的服务端能力 */
+interface ServerLike {
+  requestIP?: (request: Request) => { address: string } | null;
 }
 
 /** 单个 IP 的请求记录 */
 interface RateLimitRecord {
-  count: number;       // 当前窗口内请求次数
-  windowStart: number; // 时间窗口起始时间
+  count: number;
+  windowStart: number;
 }
 
 /**
- * 从请求上下文中提取客户端 IP 地址
+ * 将 IPv4 映射的 IPv6 地址归一化为 IPv4
+ * 例如 ::ffff:1.2.3.4 → 1.2.3.4
  */
-function extractClientIP(ctx: any): string {
-  // 优先从常见代理/转发 header 中提取
-  const headers = ctx.request?.headers;
-  if (headers) {
-    // x-forwarded-for 可能包含多个 IP，取第一个
-    const xForwardedFor = headers.get('x-forwarded-for');
-    if (xForwardedFor) {
-      return xForwardedFor.split(',')[0].trim();
-    }
-    const xRealIP = headers.get('x-real-ip');
-    if (xRealIP) {
-      return xRealIP;
-    }
-    const cfConnectingIP = headers.get('cf-connecting-ip');
-    if (cfConnectingIP) {
-      return cfConnectingIP;
+export function normalizeAddress(address: string): string {
+  const trimmed = address.trim();
+  if (trimmed.toLowerCase().startsWith('::ffff:')) {
+    const ipv4 = trimmed.slice('::ffff:'.length);
+    // 避免把 ::ffff:0:0 之类非点分格式误当作 IPv4
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ipv4)) {
+      return ipv4;
     }
   }
-
-  // 尝试从 ctx.store 中获取
-  if (ctx.store?.clientAddress) {
-    return ctx.store.clientAddress;
-  }
-  if (ctx.store?.ip) {
-    return ctx.store.ip;
-  }
-
-  // 兜底
-  return 'unknown';
+  return trimmed;
 }
 
 /**
- * 创建速率限制中间件
+ * 解析客户端 IP
+ * 默认使用连接的对端地址；仅在 trustProxy 时采信 X-Forwarded-For 的最后一项
  */
-export function createRateLimit(
-  options: Partial<RateLimitOptions> = {},
-) {
+export function resolveClientIP(
+  request: Request,
+  server: ServerLike | null,
+  trustProxy: boolean,
+): string {
+  const connectionIP = server?.requestIP?.(request)?.address ?? 'unknown';
+
+  if (!trustProxy) {
+    return normalizeAddress(connectionIP);
+  }
+
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (!forwarded) {
+    return normalizeAddress(connectionIP);
+  }
+
+  const parts = forwarded
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (parts.length === 0) {
+    return normalizeAddress(connectionIP);
+  }
+
+  // 最后一项由最近一层反向代理写入，客户端无法伪造
+  return normalizeAddress(parts[parts.length - 1]);
+}
+
+/** 判断请求是否豁免限流（健康检查、管理页面与其静态资源、CORS 预检） */
+export function isRateLimitExempt(method: string, path: string): boolean {
+  if (method === 'OPTIONS') return true;
+  if (method !== 'GET') return false;
+  if (path === '/health' || path === '/') return true;
+  return path.startsWith('/assets/');
+}
+
+/** 构造限流拒绝响应 */
+function tooManyRequests(retryAfterSeconds: number): Response {
+  return new Response(
+    JSON.stringify({ error: 'too many requests', code: 'RATE_LIMITED' }),
+    {
+      status: 429,
+      headers: {
+        'content-type': 'application/json',
+        'retry-after': String(retryAfterSeconds),
+      },
+    },
+  );
+}
+
+/**
+ * 创建限流钩子函数
+ * 返回的函数直接交给根实例的 onRequest，从而作用于全部路由
+ */
+export function createRateLimitHandler(options: RateLimitOptions = {}) {
   const {
     windowMs = 15000,
     maxRequests = 100,
     maxKeys = 1000,
+    trustProxy = false,
+    now = Date.now,
+    clientIP,
+    onReject,
   } = options;
 
-  // 使用 Map 存储限流数据（key: IP, value: RateLimitRecord）
-  const rateLimitMap = new Map<string, RateLimitRecord>();
-  // 使用数组维护插入顺序，用于 LRU 淘汰
-  const keyOrder: string[] = [];
+  // 跟踪上限至少为 1，避免异常配置导致死循环
+  const keyLimit = Math.max(1, maxKeys);
 
-  /**
-   * LRU 淘汰：当 Map 超过 maxKeys 时，移除最老的条目
-   */
+  // Map 的迭代顺序即插入/访问顺序，用于 LRU 淘汰
+  const records = new Map<string, RateLimitRecord>();
+
+  /** 淘汰最久未被访问的条目，直到可以插入新键 */
   function evictLRU() {
-    while (rateLimitMap.size >= maxKeys && keyOrder.length > 0) {
-      const oldestKey = keyOrder.shift()!;
-      rateLimitMap.delete(oldestKey);
+    while (records.size >= keyLimit) {
+      const oldestKey = records.keys().next().value;
+      if (oldestKey === undefined) return;
+      records.delete(oldestKey);
     }
   }
 
-  /**
-   * 更新键的访问顺序（移到最新位置）
-   */
-  function touchKey(key: string) {
-    const idx = keyOrder.indexOf(key);
-    if (idx !== -1) {
-      keyOrder.splice(idx, 1);
-    }
-    keyOrder.push(key);
-  }
+  return (ctx: {
+    request: Request;
+    server: ServerLike | null;
+  }): Response | undefined => {
+    const { request } = ctx;
+    const path = new URL(request.url).pathname;
 
-  return new Elysia({ name: 'rate-limit' }).onBeforeHandle((ctx) => {
-    // 排除健康检查和 Swagger 等公开端点
-    const url = new URL(ctx.request.url);
-    const path = url.pathname;
-    if (path === '/health' || path.startsWith('/swagger')) {
+    if (isRateLimitExempt(request.method, path)) {
       return undefined;
     }
 
-    const now = Date.now();
-    const ip = extractClientIP(ctx);
+    const currentTime = now();
+    const ip = clientIP
+      ? clientIP(request, ctx.server as ServerLike | null)
+      : resolveClientIP(request, ctx.server as ServerLike | null, trustProxy);
 
-    let record = rateLimitMap.get(ip);
+    let record = records.get(ip);
 
-    // 如果记录不存在或已过期，创建新记录
-    if (!record || now - record.windowStart >= windowMs) {
-      record = { count: 0, windowStart: now };
-
-      // 新键需要检查 LRU 淘汰
-      if (!rateLimitMap.has(ip)) {
-        evictLRU();
-        keyOrder.push(ip);
+    // 记录不存在或窗口已结束：重置窗口，起始时间即该 IP 在窗口内的首次请求时间
+    if (!record || currentTime - record.windowStart >= windowMs) {
+      if (record) {
+        // 已有键先移除，再按要求重新插入，维持 LRU 顺序
+        records.delete(ip);
       }
+      evictLRU();
+      record = { count: 0, windowStart: currentTime };
+      records.set(ip, record);
+    } else {
+      // 命中已有键：移到最新位置
+      records.delete(ip);
+      records.set(ip, record);
     }
-
-    // 更新访问顺序
-    touchKey(ip);
 
     record.count++;
 
-    // 检查是否超过限制
     if (record.count > maxRequests) {
-      return new Response(
-        JSON.stringify({
-          error: 'too many requests',
-          code: 'RATE_LIMITED',
-        }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
+      const remainingMs = record.windowStart + windowMs - currentTime;
+      const retryAfter = Math.max(1, Math.ceil(remainingMs / 1000));
+      onReject?.(request, 429);
+      return tooManyRequests(retryAfter);
     }
 
-    // 未超限，继续处理
     return undefined;
-  });
+  };
 }

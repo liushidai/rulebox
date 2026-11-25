@@ -2,19 +2,10 @@
  * RuleBox - mihomo/clash rule-providers YAML 托管服务
  */
 
-import { Elysia } from 'elysia';
-import { swagger } from '@elysiajs/swagger';
-
-import { loadConfig } from './config';
+import { loadConfig, type AppConfig } from './config';
 import { ConfigIndex } from './lib/index';
 import { ConfigStore } from './lib/store';
-import { createAuth } from './modules/auth';
-import { createYamlModule } from './modules/yaml';
-import { createConfigsModule } from './modules/configs';
-import { createRateLimit } from './lib/rateLimit';
-import { createBodyLimit } from './lib/bodyLimit';
-
-import type { AppConfig } from './config';
+import { buildApp } from './app';
 
 // ---- 加载配置 ----
 let appConfig: AppConfig;
@@ -39,93 +30,9 @@ const store = new ConfigStore(appConfig.DATA_DIR, index);
 store.loadAll();
 console.log(`📦 已加载 ${store.listNames().length} 个配置集`);
 
-// ---- 创建鉴权模块 ----
-const auth = createAuth(appConfig);
+// ---- 组装并启动应用 ----
+const app = buildApp({ config: appConfig, store });
 
-// ---- 创建速率限制中间件 ----
-const rateLimitMiddleware = createRateLimit();
-
-// ---- Body 大小限制常量 ----
-const BODY_LIMIT = 1024 * 1024; // 1MB（防止 DoS 攻击）
-
-// ---- 创建 bodyLimit 中间件 ----
-const bodyLimitMiddleware = createBodyLimit({ maxSize: BODY_LIMIT });
-
-// ---- 创建路由模块 ----
-const yamlModule = createYamlModule({ store, auth });
-const configsModule = createConfigsModule({ store, auth });
-
-// ---- 组装应用 ----
-const app = new Elysia()
-  // 1. 速率限制（最先执行，快速拒绝恶意 IP）
-  // 排除 /health 和 /swagger 等公开端点
-  .use(rateLimitMiddleware)
-
-  // 2. Body 大小限制（拦截 POST/PUT/PATCH）
-  .use(bodyLimitMiddleware)
-
-  // 3. Swagger: API 文档（默认关闭）
-  .use(
-    process.env.ENABLE_SWAGGER === 'true' ? swagger({
-      path: '/swagger',
-      documentation: {
-        info: {
-          title: 'RuleBox API',
-          version: '1.0.50',
-          description: 'mihomo/clash rule-providers YAML 托管服务',
-        },
-      },
-    }) : undefined,
-  )
-
-  // 请求日志
-  .onAfterHandle(({ request, set }) => {
-    const time = new Date().toISOString();
-    const resStatus = typeof set.status === 'number' ? set.status : 200;
-    console.log(`${time} ${request.method} ${request.url} ${resStatus}`);
-  })
-
-  // 全局错误处理
-  .onError(({ error, code, set }) => {
-    switch (code) {
-      case 'VALIDATION':
-        set.status = 400;
-        return {
-          error: 'invalid request body',
-          code: 'VALIDATION_ERROR',
-        };
-      case 'NOT_FOUND':
-        set.status = 404;
-        return {
-          error: 'not found',
-          code: 'ROUTE_NOT_FOUND',
-        };
-      default:
-        // 处理 store 层抛出的业务错误（如 INVALID_CONFIG_NAME）
-        if (error instanceof Error && error.message === 'INVALID_CONFIG_NAME') {
-          set.status = 400;
-          return {
-            error: 'invalid config name',
-            code: 'INVALID_CONFIG_NAME',
-          };
-        }
-        set.status = 500;
-        console.error(`${new Date().toISOString()} ERROR:`, error);
-        return {
-          error: 'internal server error',
-          code: 'INTERNAL_ERROR',
-        };
-    }
-  })
-
-  // 注册路由模块
-  .use(yamlModule)
-  .use(configsModule)
-
-  // 健康检查
-  .get('/health', () => ({ status: 'ok' }));
-
-// ---- 启动服务 ----
 app.listen(appConfig.PORT);
 
 console.log(

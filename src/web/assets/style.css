@@ -1,0 +1,1892 @@
+/* ==========================================================================
+   RuleBox 管理页样式
+   --------------------------------------------------------------------------
+   - 约束：没有内联样式、渐变、阴影和外部资源；深浅色跟随系统。
+   - 状态一律用类名、hidden 属性和 aria 属性表达，脚本不写内联样式。
+   - 窄屏用容器查询：.app 的宽度小于 720px 时切到单栏。
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 设计令牌
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  /* 底色与文字 */
+  --bg: #ffffff;
+  --bg-subtle: #f5f6f8;
+  --bg-hover: #eceef1;
+  --bg-active: #e3e6ea;
+  --fg: #1c2128;
+  --fg-muted: #556070;
+
+  /* 边框：--border 用于分隔线；--border-strong 用于输入框与按钮的轮廓，
+     按它会落到的最深底色取值，在所有实际底色上都不少于 3:1 */
+  --border: #e1e4e8;
+  --border-strong: #78808b;
+  --border-hover: #66707c;
+
+  /* 主色：--accent 是实心底色，--accent-text 是以文字、细条形态出现的主色 */
+  --accent: #0b5ea8;
+  --accent-hover: #0a5294;
+  --accent-active: #08467f;
+  --accent-fg: #ffffff;
+  --accent-text: #0b5ea8;
+  --accent-soft: #e6eff7;
+  --accent-border: #b9d4ec;
+
+  /* 危险：--danger 用于文字与图标，--danger-fill 用于实心按钮 */
+  --danger: #b42318;
+  --danger-soft: #fbeae7;
+  --danger-border: #eab8b2;
+  --danger-fill: #b42318;
+  --danger-fill-hover: #9c1e14;
+  --danger-fill-active: #871a11;
+
+  /* 警告 */
+  --warning: #7a4f01;
+  --warning-accent: #b7791f;
+  --warning-soft: #fff3d6;
+  --warning-border: #e9cf8f;
+
+  /* 提示浮层：反色，不用阴影也能从页面上浮出来 */
+  --toast-bg: #1c2128;
+  --toast-fg: #ffffff;
+  --toast-success: #7ee2a8;
+  --toast-warning: #f0b100;
+  --toast-danger: #ff9d93;
+
+  /* 遮罩与焦点环 */
+  --backdrop: rgba(0, 0, 0, 0.45);
+  --focus: #0b5ea8;
+
+  /* 字体：只用系统字体栈，中文回退到系统自带的中文字体 */
+  --font-sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", monospace;
+
+  /* 字号阶梯 */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  /* 形状与节奏 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --control-h: 32px;
+  --control-h-sm: 28px;
+  --topbar-h: 56px;
+  --sidebar-w: 272px;
+  --dialog-w: 440px;
+  --dialog-w-lg: 560px;
+  --transition: 120ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #16181d;
+    --bg-subtle: #1c1f25;
+    --bg-hover: #23272e;
+    --bg-active: #2b3038;
+    --fg: #e3e6ea;
+    --fg-muted: #9ba4af;
+
+    --border: #333943;
+    --border-strong: #747e8a;
+    --border-hover: #8791a0;
+
+    --accent: #1a6fc4;
+    --accent-hover: #2270cf;
+    --accent-active: #155aa8;
+    --accent-fg: #ffffff;
+    --accent-text: #79b8f5;
+    --accent-soft: #1b2a3b;
+    --accent-border: #2f4a6e;
+
+    --danger: #f28b82;
+    --danger-soft: #33201f;
+    --danger-border: #5c2b27;
+    --danger-fill: #c5281c;
+    --danger-fill-hover: #d63b2f;
+    --danger-fill-active: #a82218;
+
+    --warning: #e3b341;
+    --warning-accent: #d29922;
+    --warning-soft: #2e2715;
+    --warning-border: #5a4a1c;
+
+    --toast-bg: #e3e6ea;
+    --toast-fg: #1c2128;
+    --toast-success: #1a7f37;
+    --toast-warning: #8a5a00;
+    --toast-danger: #b42318;
+
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --focus: #e3e6ea;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. 基础重置
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: var(--topbar-h);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+p,
+ul {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+code {
+  font-family: var(--font-mono);
+}
+
+/* 脚本用 hidden 属性控制显隐；组件本身多半设置了 display，所以这里需要提权 */
+[hidden] {
+  display: none !important;
+}
+
+/* 焦点环：全站统一为 2px 实线，外扩 2px */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   3. 通用工具类
+   -------------------------------------------------------------------------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 相对视口定位：页面滚动之后用键盘把焦点移到它时，不用先滚回顶部才能看到 */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1001;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+.noscript {
+  margin: 24px 16px;
+  font-size: var(--text-base);
+  color: var(--fg-muted);
+}
+
+.icon {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* 行内代码：一句话里需要被认出来是「原样输入的值」时使用 */
+.code {
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.spinner {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. 组件
+   -------------------------------------------------------------------------- */
+
+/* 4.1 按钮：灰底 / 描边 / 主 / 幽灵 / 危险实心，两档尺寸 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--fg);
+  background: var(--bg-subtle);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+}
+
+.btn:active {
+  background: var(--bg-active);
+}
+
+.btn-sm {
+  height: var(--control-h-sm);
+  padding: 0 8px;
+  font-size: var(--text-sm);
+}
+
+.btn-icon {
+  width: var(--control-h-sm);
+  padding: 0;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-secondary {
+  background: var(--bg);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-hover);
+}
+
+.btn-secondary:active {
+  background: var(--bg-hover);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-primary:active {
+  background: var(--accent-active);
+}
+
+/* 幽灵按钮：默认只有文字，悬停才出现底色 */
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.btn-ghost:hover,
+.btn-ghost:active,
+.btn-ghost:focus-visible {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.btn-danger-ghost {
+  color: var(--danger);
+}
+
+.btn-danger-ghost:hover,
+.btn-danger-ghost:active,
+.btn-danger-ghost:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 危险实心按钮：只用在二次确认对话框里 */
+.btn-danger {
+  background: var(--danger-fill);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: var(--danger-fill-hover);
+}
+
+.btn-danger:active {
+  background: var(--danger-fill-active);
+}
+
+/* 展开态：批量面板打开后，工具栏上的入口从主按钮退为描边按钮 */
+.btn[aria-expanded="true"] {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.btn[aria-expanded="true"]:hover {
+  background: var(--bg-hover);
+}
+
+/* 禁用：文字仍保持 4.5:1 的对比度，靠「没有深色描边 + 灰底」与可用状态区分 */
+.btn:disabled {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
+/* 提交中：按钮内出现小转圈，文字保留 */
+.btn[aria-busy="true"]::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* 4.2 输入框 */
+.input,
+.textarea,
+.select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 20px;
+  color: var(--fg);
+  background: var(--bg);
+  transition: border-color var(--transition);
+}
+
+.input,
+.select {
+  height: var(--control-h);
+}
+
+.textarea {
+  padding: 7px 10px;
+  min-height: 68px;
+  resize: vertical;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+
+.input:hover,
+.textarea:hover,
+.select:hover {
+  border-color: var(--border-hover);
+}
+
+.input:focus-visible,
+.textarea:focus-visible,
+.select:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.input:disabled,
+.textarea:disabled {
+  background: var(--bg-subtle);
+  cursor: not-allowed;
+}
+
+.input[aria-invalid="true"],
+.textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.input[aria-invalid="true"]:focus-visible,
+.textarea[aria-invalid="true"]:focus-visible {
+  border-color: var(--danger);
+  outline-color: var(--danger);
+}
+
+/* 等宽输入：名称、令牌、链接这类需要逐字符核对的内容 */
+.input-mono,
+.textarea-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+/* 订阅地址：不拉伸，整条折行显示，方便看清和选中 */
+.link-input {
+  resize: none;
+  word-break: break-all;
+}
+
+/* 输入框内右侧的小按钮（显示 / 隐藏令牌） */
+.input-affix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-affix .input {
+  padding-right: 56px;
+}
+
+.input-affix-btn {
+  position: absolute;
+  right: 3px;
+  height: 26px;
+}
+
+.input-affix-btn:focus-visible {
+  outline-offset: -2px;
+}
+
+/* 带放大镜的搜索框 */
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 320px;
+  max-width: 100%;
+}
+
+.search > .icon {
+  position: absolute;
+  left: 10px;
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+
+.search .input {
+  padding-left: 32px;
+  appearance: none;
+}
+
+/* 4.3 表单字段：标签在上，说明或错误在下 */
+.field {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.field > * + * {
+  margin-top: 6px;
+}
+
+.field-label {
+  display: block;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.field-optional {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--fg-muted);
+}
+
+.field-hint {
+  display: block;
+  font-size: var(--text-xs);
+  line-height: 18px;
+  color: var(--fg-muted);
+}
+
+/* 说明与字数计数并排：说明靠左，计数靠右 */
+.field-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--danger);
+}
+
+.field-error .icon {
+  margin-top: 2px;
+  color: var(--danger);
+}
+
+/* 单选选项：用于「新建规则集」里选类型 */
+.radio-group {
+  display: grid;
+  gap: 8px;
+}
+
+.radio-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  cursor: pointer;
+}
+
+.radio-option input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.radio-title {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.radio-desc {
+  display: block;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+}
+
+/* 4.4 类型徽标与计数 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg-muted);
+  background: transparent;
+}
+
+.badge-sm {
+  height: 18px;
+  padding: 0 5px;
+}
+
+.count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 4.5 提示条：表单内、面板内的持久说明 */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg);
+  background: var(--bg-subtle);
+}
+
+.alert .icon {
+  margin-top: 2px;
+  color: var(--fg-muted);
+}
+
+.alert strong {
+  font-weight: 600;
+}
+
+.alert-danger {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  border-left-color: var(--danger);
+}
+
+.alert-danger .icon {
+  color: var(--danger);
+}
+
+.alert-warning {
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+  border-left-color: var(--warning-accent);
+}
+
+.alert-warning .icon {
+  color: var(--warning-accent);
+}
+
+/* 4.6 区块状态：加载中、空、失败共用一个结构 */
+.state {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 72px 24px;
+  text-align: center;
+}
+
+.state-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.state-desc {
+  max-width: 36em;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.state-action {
+  margin-top: 12px;
+}
+
+.state-spinner {
+  margin-bottom: 8px;
+}
+
+.state-compact {
+  padding: 24px 16px;
+}
+
+.state-compact .state-title {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--fg-muted);
+}
+
+/* 4.7 提示浮层：反色、无阴影，只承载「已经发生了什么」 */
+.toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 100;
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  overflow-wrap: anywhere;
+}
+
+.toast .icon {
+  color: var(--toast-success);
+}
+
+.toast-warning .icon {
+  color: var(--toast-warning);
+}
+
+.toast-danger .icon {
+  color: var(--toast-danger);
+}
+
+/* 4.8 对话框：原生 <dialog> 加 showModal() */
+.dialog {
+  width: min(var(--dialog-w), calc(100% - 32px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.dialog-lg {
+  width: min(var(--dialog-w-lg), calc(100% - 32px));
+}
+
+/* 只有打开状态才设置 display，否则关闭的对话框也会显示出来 */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog::backdrop {
+  background: var(--backdrop);
+}
+
+.dialog-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 0 20px;
+}
+
+.dialog-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.dialog-body {
+  display: grid;
+  flex: 0 1 auto;
+  gap: 16px;
+  min-height: 0;
+  padding: 12px 20px 20px;
+  overflow: auto;
+}
+
+.dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.dialog-text {
+  font-size: var(--text-base);
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+/* 对话框里展示「将要被删除的那一条」 */
+.rule-preview {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.rule-preview code {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.rule-preview-desc {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+   5. 页面骨架
+   -------------------------------------------------------------------------- */
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* 作为容器查询的容器。它也会成为固定定位后代的包含块，
+     所以提示浮层的容器放在它外面 */
+  container: app / inline-size;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-h);
+  padding-inline: clamp(16px, 3vw, 32px);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: minmax(min-content, 1fr);
+  background: var(--bg-subtle);
+}
+
+/* 5.1 左栏：规则集列表。页面滚动时固定在视口内，列表过长时自己滚动 */
+.sidebar {
+  position: sticky;
+  top: var(--topbar-h);
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  max-height: calc(100vh - var(--topbar-h));
+  max-height: calc(100dvh - var(--topbar-h));
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 20px 16px 8px;
+}
+
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 28px;
+}
+
+/* 窄屏才显示的下拉选择器 */
+.picker {
+  display: none;
+}
+
+.filter {
+  min-width: 0;
+  margin: 4px 12px 10px;
+  padding: 0;
+  border: 0;
+}
+
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.filter label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 7px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: 1;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.filter label:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.filter input:checked + label {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.filter input:focus-visible + label {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.set-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px 16px;
+}
+
+.set-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name count"
+    "meta meta";
+  column-gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+  transition: background-color var(--transition);
+}
+
+.set-item:hover {
+  background: var(--bg-hover);
+}
+
+.set-item:focus-visible {
+  z-index: 1;
+  outline-offset: -2px;
+}
+
+.set-item[aria-current="page"],
+.set-item[aria-current="page"]:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.set-item[aria-current="page"] .set-name {
+  color: var(--accent-text);
+}
+
+.set-name {
+  grid-area: name;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-count {
+  grid-area: count;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 20px;
+  color: var(--fg-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  line-height: 20px;
+}
+
+.set-desc {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-empty {
+  padding: 12px 16px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+/* 5.2 右栏 */
+.detail {
+  min-width: 0;
+  width: 100%;
+  max-width: 1440px;
+  justify-self: center;
+  padding: clamp(20px, 3vw, 36px);
+}
+
+#detail-empty:not(:empty) {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.detail-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "heading actions"
+    "desc desc";
+  column-gap: 16px;
+  row-gap: 6px;
+}
+
+.detail-heading {
+  grid-area: heading;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.detail-title {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(20px, 3vw, 28px);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.detail-desc {
+  grid-area: desc;
+  font-size: var(--text-base);
+  line-height: 22px;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.detail-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.detail-actions .btn-secondary {
+  margin-right: 6px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 0 14px;
+}
+
+.toolbar .input,
+.toolbar .btn {
+  height: 38px;
+  border-radius: 8px;
+}
+
+.toolbar .btn {
+  flex: none;
+}
+
+/* --------------------------------------------------------------------------
+   6. 批量添加
+   -------------------------------------------------------------------------- */
+.batch {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.batch-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.batch-hint {
+  margin-top: -6px;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+}
+
+/* 6.1 编辑器：行号栏 + 文本域。
+   两者的字体、字号、行高和上内边距必须完全相同，否则行号会和行内容错位。
+   文本域关闭自动换行，保证「一行文本 = 一行行号」。
+   行高只由文本域决定：行号栏加了 size containment，内容再长也不参与网格行高的计算，
+   自身随网格行拉伸（文本域可以拖动调整高度，行号栏跟着变）。
+   否则行号栏的内容会把编辑器撑到和内容一样高，行号栏自己没有可滚动的余量，
+   脚本设置它的 scrollTop 时始终被钳在 0，无法跟随文本域滚动。
+   size containment 同时让宽度不再随内容变化，所以宽度写成显式值：
+   默认按 5 位行号，脚本在 renderGutter() 里用 data-digits 记下行号的位数，
+   位数较少时由下面的规则收窄。
+   行号栏的下内边距留得比文本域大：文本域出现横向滚动条时可视高度会变小，
+   行号栏的可滚动范围必须不小于文本域，才能在任何滚动位置都对齐。 */
+.editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  transition: border-color var(--transition);
+}
+
+.editor:focus-within {
+  border-color: var(--accent);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.editor.is-invalid,
+.editor.is-invalid:focus-within {
+  border-color: var(--danger);
+}
+
+.editor.is-invalid:focus-within {
+  outline-color: var(--danger);
+}
+
+.gutter {
+  /* 内容不参与行高计算；高度跟随网格行，也就是跟随文本域 */
+  align-self: stretch;
+  contain: size;
+  /* 显式宽度：5 位的行号 + 右内边距 10px + 右边框 1px（box-sizing: border-box） */
+  width: calc(5ch + 11px);
+  /* 下内边距 40px = 与文本域一致的 10px + 给横向滚动条留的 30px */
+  padding: 10px 10px 40px 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行号不超过 3 位时保持原来的 40px；位数更多时按位数加宽（5 位用上面的默认值）。
+   data-digits 由脚本在 renderGutter() 里按行数写入 */
+.gutter[data-digits="1"],
+.gutter[data-digits="2"],
+.gutter[data-digits="3"] {
+  width: 40px;
+}
+
+.gutter[data-digits="4"] {
+  width: calc(4ch + 11px);
+}
+
+.gutter[data-digits="6"] {
+  width: calc(6ch + 11px);
+}
+
+/* 有出错的行时，每个行号是一个独立的元素，才能单独标色 */
+.gutter span {
+  display: block;
+  height: 20px;
+}
+
+.gutter .is-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* 文本改过以后，旧的错误标记只作参考：保留加粗，去掉红色 */
+.gutter .is-stale {
+  background: transparent;
+  color: var(--fg);
+}
+
+.editor-textarea {
+  display: block;
+  width: 100%;
+  height: 180px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg);
+  background: transparent;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+
+.editor-textarea::placeholder {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+
+.editor-textarea:focus-visible {
+  outline: none;
+}
+
+/* 6.2 出错的行：行号 + 原文 + 原因。每一行都是按钮，点击后定位到文本域里的那一行。
+   只用上下两条分隔线，不另外加外框，避免面板里框套框。 */
+.error-list {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.error-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 4px 16px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  text-align: left;
+  color: var(--fg);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--transition);
+}
+
+.error-row:last-child {
+  border-bottom: 0;
+}
+
+.error-row:hover {
+  background: var(--danger-soft);
+}
+
+.error-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.error-line,
+.error-value {
+  font-family: var(--font-mono);
+  color: var(--danger);
+}
+
+.error-line {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.error-value {
+  overflow-wrap: anywhere;
+}
+
+.error-reason {
+  min-width: 0;
+}
+
+/* 6.3 底部：统一描述 + 提交 */
+.batch-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.batch-desc-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  flex: 1 1 320px;
+  gap: 8px;
+  align-items: center;
+}
+
+.batch-desc-field .field-label {
+  white-space: nowrap;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------------
+   7. 规则表与分页
+   -------------------------------------------------------------------------- */
+.rules-results {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.detail-head[hidden] ~ .rules-results {
+  display: none;
+}
+
+/* 翻页或搜索时保留上一页的内容，在这条状态栏里提示正在加载 */
+.table-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 11px 11px 0 0;
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+}
+
+.table-status .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.rule-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.rule-table th {
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+  color: var(--fg-muted);
+  background: var(--bg-subtle);
+}
+
+.rule-table td {
+  padding: 7px 16px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.rule-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table-status[hidden] + .rule-table th:first-child {
+  border-top-left-radius: 11px;
+}
+
+.table-status[hidden] + .rule-table th:last-child {
+  border-top-right-radius: 11px;
+}
+
+.col-value {
+  width: 55%;
+}
+
+.rule-table th.col-actions {
+  width: 128px;
+  padding-right: 24px;
+  text-align: right;
+}
+
+.rule-table tbody tr {
+  transition: background-color var(--transition);
+}
+
+.rule-table tbody tr:hover,
+.rule-table tbody tr:focus-within {
+  background: var(--bg-hover);
+}
+
+.cell-value code {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.cell-desc {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-empty {
+  color: var(--fg-muted);
+}
+
+.cell-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell-actions .btn + .btn {
+  margin-left: 2px;
+}
+
+/* 行内改描述：编辑中的那一行用主色浅底标识，整行让给编辑器 */
+.rule-table tbody tr.is-editing,
+.rule-table tbody tr.is-editing:hover,
+.rule-table tbody tr.is-editing:focus-within {
+  background: var(--accent-soft);
+}
+
+.rule-table tr.is-editing td {
+  border-bottom-color: var(--accent-border);
+}
+
+.cell-edit {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.edit-row {
+  display: grid;
+  grid-template-columns: fit-content(40%) minmax(0, 1fr) auto auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.edit-value {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.edit-row .input {
+  height: var(--control-h-sm);
+  font-size: var(--text-sm);
+}
+
+.edit-error {
+  grid-column: 1 / -1;
+}
+
+/* 分页 */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.pager-info,
+.pager-page {
+  font-size: var(--text-sm);
+  line-height: 20px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pager-page {
+  min-width: 84px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   8. 登录页
+   -------------------------------------------------------------------------- */
+.login-page {
+  grid-template-rows: 1fr;
+  background: var(--bg-subtle);
+}
+
+.login {
+  display: grid;
+  place-items: center;
+  padding: 32px 16px clamp(48px, 12vh, 112px);
+}
+
+.login-panel {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 400px);
+}
+
+.login-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.login-brand .brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.login-brand .brand-mark > .icon {
+  width: 21px;
+  height: 21px;
+}
+
+.login-card {
+  display: grid;
+  gap: 20px;
+  padding: clamp(20px, 6vw, 32px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.login-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+}
+
+.login-card .input,
+.login-submit {
+  height: 44px;
+  border-radius: 8px;
+}
+
+.login-card .input {
+  padding-left: 12px;
+  font-size: var(--text-lg);
+}
+
+.login-card .input-affix-btn {
+  right: 4px;
+  height: 34px;
+  border-radius: var(--radius-md);
+}
+
+.login-submit {
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   9. 窄屏（容器查询：.app 的宽度小于 720px）
+   -------------------------------------------------------------------------- */
+@container app (max-width: 719px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  /* 左栏：列表换成下拉选择器，「新建」挪到选择器右侧 */
+  .sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "picker new"
+      "filter filter";
+    align-self: auto;
+    gap: 8px;
+    max-height: none;
+    padding: 12px 16px;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-head {
+    display: contents;
+  }
+
+  .sidebar-title {
+    display: none;
+  }
+
+  .sidebar-new {
+    grid-area: new;
+  }
+
+  .picker {
+    display: block;
+    grid-area: picker;
+    font-size: var(--text-sm);
+  }
+
+  .set-list,
+  .set-state {
+    display: none;
+  }
+
+  .filter {
+    grid-area: filter;
+    margin: 0;
+  }
+
+  /* 右栏 */
+  .detail {
+    padding: 20px 16px;
+  }
+
+  .detail-head {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "heading"
+      "desc"
+      "actions";
+    row-gap: 6px;
+  }
+
+  .detail-title {
+    font-size: 22px;
+  }
+
+  .detail-actions {
+    margin-top: 2px;
+  }
+
+  .search {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  /* 触屏上把小按钮放大到 32px */
+  .btn-sm {
+    height: var(--control-h);
+    padding: 0 10px;
+    font-size: var(--text-base);
+  }
+
+  .btn-icon {
+    width: var(--control-h);
+  }
+
+  .input-affix-btn {
+    height: var(--control-h-sm);
+  }
+
+  /* 表格改为堆叠行：第一行规则值，第二行描述 + 操作。
+     单元格的边框清掉以后，分隔线改由行自己承担。 */
+  .rule-table,
+  .rule-table tbody {
+    display: block;
+  }
+
+  .rule-table thead {
+    display: none;
+  }
+
+  .rule-table tbody tr,
+  .rule-table tbody tr:hover {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "value value"
+      "desc actions";
+    align-items: center;
+    gap: 4px 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
+
+  .rule-table tbody tr:first-child {
+    border-radius: 11px 11px 0 0;
+  }
+
+  .rule-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .rule-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+
+  .rule-table tbody tr.is-editing {
+    border-bottom-color: var(--accent-border);
+    background: var(--accent-soft);
+  }
+
+  .cell-value {
+    grid-area: value;
+  }
+
+  .cell-desc {
+    grid-area: desc;
+  }
+
+  .cell-actions {
+    grid-area: actions;
+  }
+
+  .cell-edit {
+    grid-column: 1 / -1;
+  }
+
+  /* 编辑行：规则值独占一行，输入框和按钮在下一行 */
+  .edit-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px 8px;
+  }
+
+  .edit-value {
+    grid-column: 1 / -1;
+  }
+
+  .pager {
+    flex-wrap: wrap;
+  }
+
+  /* 批量添加 */
+  .batch {
+    padding: 12px;
+  }
+
+  .error-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .error-reason {
+    grid-column: 1 / -1;
+  }
+
+  .batch-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .batch-desc-field {
+    flex-basis: auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .batch-actions .btn-primary {
+    flex: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   10. 动效降级
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none;
+    animation: none;
+  }
+
+  .btn[aria-busy="true"]::before {
+    border-color: var(--border-strong);
+  }
+}

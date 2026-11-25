@@ -68,10 +68,36 @@ export const ConfigEntrySchema = t.Object({
   type: t.String(),
   description: t.String(),
   created_at: t.String(),
+  item_count: t.Number({ description: '该配置集的数据项条数' }),
 });
 
 export const ConfigListResponse = t.Object({
   configs: t.Array(ConfigEntrySchema),
+});
+
+// --- 数据项查询参数 ---
+export const ItemsQuery = t.Object({
+  page: t.Optional(
+    t.Numeric({
+      minimum: 1,
+      multipleOf: 1,
+      description: '页码，从 1 开始；不传时返回全部数据项',
+    }),
+  ),
+  pageSize: t.Optional(
+    t.Numeric({
+      minimum: 1,
+      maximum: 1000,
+      multipleOf: 1,
+      description: '每页条数，1 到 1000，默认 100；仅在传了 page 时生效',
+    }),
+  ),
+  q: t.Optional(
+    t.String({
+      maxLength: 200,
+      description: '关键字，不区分大小写匹配 value 或 description',
+    }),
+  ),
 });
 
 export const ConfigItemsResponse = t.Object({
@@ -80,4 +106,17 @@ export const ConfigItemsResponse = t.Object({
   description: t.String(),
   created_at: t.String(),
   items: t.Array(ConfigItemSchema),
+  total: t.Number({ description: '筛选后的数据项总条数' }),
+  page: t.Optional(t.Number({ description: '当前页码，仅在传了 page 时返回' })),
+  pageSize: t.Optional(t.Number({ description: '每页条数，仅在传了 page 时返回' })),
+});
+
+export const DeleteItemsResponse = t.Object({
+  removed: t.Number({ description: '实际被删除的条数' }),
+  from: t.String(),
+});
+
+export const SubscriptionResponse = t.Object({
+  name: t.String(),
+  url: t.String({ description: '根相对订阅地址，带 VIEW_TOKEN' }),
 });

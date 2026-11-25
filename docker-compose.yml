@@ -8,6 +8,7 @@ services:
       # 未设置时服务将拒绝启动
       - VIEW_TOKEN
       - ADMIN_TOKEN
+      - TRUST_PROXY=${TRUST_PROXY:-false}
       - DATA_DIR=/data
     volumes:
       - ./data:/data

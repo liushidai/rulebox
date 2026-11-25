@@ -7,6 +7,8 @@ export interface AppConfig {
   ADMIN_TOKEN: string;
   PORT: number;
   DATA_DIR: string;
+  /** 是否信任单层反向代理写入的 X-Forwarded-For 最后一项 */
+  TRUST_PROXY: boolean;
 }
 
 /**
@@ -35,11 +37,14 @@ export function loadConfig(): AppConfig {
 
   const PORT = parseInt(process.env.PORT || '8080', 10);
   const DATA_DIR = process.env.DATA_DIR || '/data';
+  // 仅字符串 'true' 视为启用，其余（含未设置）一律关闭
+  const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 
   return {
     VIEW_TOKEN,
     ADMIN_TOKEN,
     PORT,
     DATA_DIR,
+    TRUST_PROXY,
   };
 }

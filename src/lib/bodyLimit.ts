@@ -1,49 +1,68 @@
 /**
- * 请求体大小限制中间件
- * 通过 Elysia.derive() 拦截 body 解析，确保实际读取字节数不超过限制
+ * 请求体约束
+ * 在 onRequest 阶段（请求体解析之前）拦截：
+ * - 声明 Content-Length 超过上限 → 413
+ * - 未声明长度但使用分块传输 → 411
  */
 
-import { Elysia } from 'elysia';
+/** 默认请求体上限 1MB */
+export const DEFAULT_BODY_LIMIT = 1024 * 1024;
 
-interface BodyLimitOptions {
-  maxSize: number;
+export interface BodyLimitOptions {
+  /** 允许的最大请求体字节数，默认 1MB */
+  maxSize?: number;
+  /** 拒绝请求时的日志回调，由装配层注入 */
+  onReject?: (request: Request, status: number) => void;
+}
+
+/** 无请求体语义的方法，不受请求体约束影响 */
+const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** 构造 JSON 错误响应 */
+function reject(status: number, error: string, code: string): Response {
+  return new Response(JSON.stringify({ error, code }), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 /**
- * 创建 bodyLimit 中间件
- * 
- * 工作原理：
- * 1. 对 POST/PUT/PATCH 请求，通过 derive 在 body 解析前拦截
- * 2. 使用 stream 逐块读取请求体，累计字节数
- * 3. 超过限制时立即中断并返回 413
- * 4. 未超限时返回完整 body 供后续路由处理
+ * 创建请求体约束钩子函数
+ * 返回的函数直接交给根实例的 onRequest，保证在请求体解析之前执行
  */
-export function createBodyLimit(
-  options: BodyLimitOptions,
-) {
-  const { maxSize } = options;
+export function createBodyLimitHandler(options: BodyLimitOptions = {}) {
+  const { maxSize = DEFAULT_BODY_LIMIT, onReject } = options;
 
-  return new Elysia({ name: 'body-limit' })
-    .derive({ as: 'global' }, async ({ request }) => {
-      if (!['POST', 'PUT', 'PATCH'].includes(request.method)) {
-        return undefined;
-      }
+  return (ctx: { request: Request }): Response | undefined => {
+    const { request } = ctx;
 
-      // 先检查 Content-Length 标头（快速失败）
-      const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
-      if (contentLength > maxSize) {
-        return { $bodyLimitRejected: true };
-      }
-
+    if (BODYLESS_METHODS.has(request.method)) {
       return undefined;
-    })
-    .onError(({ error, set }) => {
-      if (error instanceof Error && error.message === 'Body too large') {
-        set.status = 413;
-        return {
-          error: 'payload too large',
-          code: 'PAYLOAD_TOO_LARGE',
-        };
+    }
+
+    const contentLengthHeader = request.headers.get('content-length');
+
+    if (contentLengthHeader !== null) {
+      // 非纯数字的长度视为客户端错误，避免用畸形值绕过上限
+      if (!/^\d+$/.test(contentLengthHeader.trim())) {
+        onReject?.(request, 411);
+        return reject(411, 'content-length required', 'LENGTH_REQUIRED');
       }
-    });
+      const contentLength = Number(contentLengthHeader.trim());
+      if (contentLength > maxSize) {
+        onReject?.(request, 413);
+        return reject(413, 'payload too large', 'PAYLOAD_TOO_LARGE');
+      }
+      return undefined;
+    }
+
+    // 未声明长度且使用分块传输：无法在解析前确认大小，直接拒绝
+    // 注意：无请求体的 DELETE 不带 Content-Length 也不带 Transfer-Encoding，不受影响
+    if (request.headers.get('transfer-encoding') !== null) {
+      onReject?.(request, 411);
+      return reject(411, 'content-length required', 'LENGTH_REQUIRED');
+    }
+
+    return undefined;
+  };
 }

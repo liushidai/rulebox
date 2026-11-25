@@ -3,7 +3,7 @@
  * 负责 index.yaml 的加载、内存维护与原子写入
  */
 
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
 
@@ -50,11 +50,11 @@ export class ConfigIndex {
 
   /**
    * 启动时加载 index.yaml 到内存
-   * 如果文件不存在，创建空索引
+   * 如果文件不存在，创建数据目录和空索引
    */
   load(): void {
     if (!existsSync(this.indexPath)) {
-      // 首次运行，创建空索引
+      mkdirSync(this.dataDir, { recursive: true });
       this.save();
       return;
     }

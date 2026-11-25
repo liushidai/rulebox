@@ -9,6 +9,27 @@ import { parseYaml, serializeYaml, type ConfigItem, type YamlConfig } from './ya
 import { ConfigIndex, type CatalogEntry, type ConfigType } from './index';
 import { LockMap } from './lock';
 
+/** 默认每页条数（仅在传了 page 时生效） */
+export const DEFAULT_PAGE_SIZE = 100;
+
+/** 数据项查询参数 */
+export interface QueryItemsOptions {
+  /** 页码，从 1 开始；不传时返回全部数据项 */
+  page?: number;
+  /** 每页条数，默认 100，仅在传了 page 时生效 */
+  pageSize?: number;
+  /** 关键字，不区分大小写匹配 value 或 description */
+  q?: string;
+}
+
+/** 数据项查询结果 */
+export interface QueryItemsResult {
+  /** 本页数据项（未传 page 时为全部） */
+  items: ConfigItem[];
+  /** 筛选后的数据项总条数 */
+  total: number;
+}
+
 export class ConfigStore {
   private cache: Map<string, ConfigItem[]> = new Map();
   private dataDir: string;
@@ -93,6 +114,46 @@ export class ConfigStore {
   getEntry(name: string): CatalogEntry | undefined {
     this.validateConfigName(name);
     return this.index.get(name);
+  }
+
+  /**
+   * 查询配置的数据项（先筛选后分页）
+   * 不传 page 时返回全部数据项；不传 pageSize 时使用默认值 100
+   */
+  queryItems(name: string, options: QueryItemsOptions = {}): QueryItemsResult {
+    this.validateConfigName(name);
+
+    const all = this.cache.get(name) ?? [];
+    const keyword = options.q?.toLowerCase();
+    const filtered = keyword
+      ? all.filter(
+          (item) =>
+            item.value.toLowerCase().includes(keyword) ||
+            (item.description ?? '').toLowerCase().includes(keyword),
+        )
+      : all;
+
+    const total = filtered.length;
+
+    // 未传 page：返回全部，保持存储顺序
+    if (options.page === undefined) {
+      return { items: filtered.slice(), total };
+    }
+
+    const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+    const start = (options.page - 1) * pageSize;
+    return {
+      items: filtered.slice(start, start + pageSize),
+      total,
+    };
+  }
+
+  /**
+   * 获取配置的数据项条数（空配置集为 0）
+   */
+  countItems(name: string): number {
+    this.validateConfigName(name);
+    return this.cache.get(name)?.length ?? 0;
   }
 
   /**
@@ -194,10 +255,19 @@ export class ConfigStore {
 
   /**
    * 追加数据项（带磁盘读取 + 最新覆盖去重 + 锁机制）
+   * 锁内检查配置是否存在，不存在时抛 CONFIG_NOT_FOUND，避免检查与加锁之间的时间窗
    */
   async addItems(name: string, newItems: ConfigItem[]): Promise<void> {
     this.validateConfigName(name);
+    let lockError: Error | undefined;
+
     await this.lockMap.acquire(name, async () => {
+      // 锁内检查配置是否存在，防止路由层检查后配置被并发删除
+      if (!this.index.exists(name)) {
+        lockError = new Error('CONFIG_NOT_FOUND');
+        return;
+      }
+
       // 从磁盘读取最新状态
       const filePath = join(this.dataDir, `${name}.yaml`);
       let currentItems: ConfigItem[] = [];
@@ -229,14 +299,29 @@ export class ConfigStore {
       this.cache.set(name, merged);
       this.writeToFile(name, merged);
     });
+
+    if (lockError) {
+      throw lockError;
+    }
   }
 
   /**
    * 删除数据项（基于 value 匹配删除 + 锁机制）
+   * 锁内检查配置是否存在，不存在时抛 CONFIG_NOT_FOUND，确保不落盘
+   * @returns 实际被删除的条数（请求中重复或不存在的 value 不计入）
    */
-  async removeItems(name: string, itemsToRemove: string[]): Promise<void> {
+  async removeItems(name: string, itemsToRemove: string[]): Promise<number> {
     this.validateConfigName(name);
+    let removed = 0;
+    let lockError: Error | undefined;
+
     await this.lockMap.acquire(name, async () => {
+      // 锁内检查配置是否存在，不存在时抛错且不写文件
+      if (!this.index.exists(name)) {
+        lockError = new Error('CONFIG_NOT_FOUND');
+        return;
+      }
+
       // 从磁盘读取最新状态
       const filePath = join(this.dataDir, `${name}.yaml`);
       let currentItems: ConfigItem[] = [];
@@ -249,11 +334,18 @@ export class ConfigStore {
 
       const removeSet = new Set(itemsToRemove);
       const filtered = currentItems.filter((item) => !removeSet.has(item.value));
+      removed = currentItems.length - filtered.length;
 
       // 更新内存和磁盘
       this.cache.set(name, filtered);
       this.writeToFile(name, filtered);
     });
+
+    if (lockError) {
+      throw lockError;
+    }
+
+    return removed;
   }
 
   /**

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>RuleBox</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+<noscript><p class="noscript">RuleBox 管理页需要浏览器启用 JavaScript 才能使用。</p></noscript>
+
+<!-- 图标集中定义在这里，页面里的元素用 data-icon 引用，脚本启动时统一填入 -->
+<template id="icons">
+  <svg data-icon="brand" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h3.5"/></svg>
+  <svg data-icon="plus" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg>
+  <svg data-icon="search" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+  <svg data-icon="link" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 9.5l3-3"/><path d="M5.5 7.5l-1 1a2.5 2.5 0 0 0 3.5 3.5l1-1"/><path d="M10.5 8.5l1-1a2.5 2.5 0 0 0-3.5-3.5l-1 1"/></svg>
+  <svg data-icon="copy" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5v-6a1 1 0 0 1 1-1h6"/></svg>
+  <svg data-icon="close" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+  <svg data-icon="check" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3l6-7"/></svg>
+  <svg data-icon="info" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 7.5v3.5"/><path d="M8 5h.01"/></svg>
+  <svg data-icon="alert-circle" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5"/><path d="M8 11h.01"/></svg>
+  <svg data-icon="alert-triangle" class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5l6.2 10.75a.5.5 0 0 1-.43.75H2.23a.5.5 0 0 1-.43-.75z"/><path d="M8 7v3"/><path d="M8 12.25h.01"/></svg>
+</template>
+
+<!-- 登录视图。表单控件不带 name：即使脚本没有生效，原生提交也不会把令牌带进地址 -->
+<!-- 跳转链接放在应用根元素外面：根元素是容器查询的容器，会成为定位后代的包含块 -->
+<a class="skip-link" id="skip-link" href="#main" hidden>跳到规则列表</a>
+
+<div class="app login-page" id="login">
+  <main class="login">
+    <div class="login-panel">
+      <div class="login-brand">
+        <span class="brand-mark" data-icon="brand" aria-hidden="true"></span>
+        <span>RuleBox</span>
+      </div>
+      <form class="login-card" id="login-form" aria-labelledby="login-title" autocomplete="off">
+        <h1 class="login-title" id="login-title">登录</h1>
+        <div class="alert" id="login-notice" role="status" hidden></div>
+        <div class="field">
+          <label class="field-label" for="login-token">登录令牌</label>
+          <div class="input-affix">
+            <input class="input input-mono" id="login-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="login-error">
+            <button class="btn btn-sm btn-ghost input-affix-btn" id="login-toggle" type="button" aria-controls="login-token">显示</button>
+          </div>
+          <p class="field-error" id="login-error" hidden></p>
+        </div>
+        <button class="btn btn-primary btn-block login-submit" id="login-submit" type="submit">登录</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<!-- 主界面 -->
+<div class="app" id="app" hidden>
+  <header class="topbar">
+    <span class="brand"><span class="brand-mark" data-icon="brand" aria-hidden="true"></span>RuleBox</span>
+    <button class="btn btn-sm btn-ghost" id="logout" type="button">退出登录</button>
+  </header>
+
+  <div class="workspace">
+    <!-- 左栏：规则集列表 -->
+    <aside class="sidebar" aria-label="规则集">
+      <div class="sidebar-head">
+        <h2 class="sidebar-title">规则集 <span class="count" id="set-count"></span></h2>
+        <button class="btn btn-sm btn-secondary sidebar-new" id="btn-new" type="button" data-icon="plus">新建</button>
+      </div>
+
+      <!-- 只在窄屏显示：用下拉选择器代替列表 -->
+      <select class="select picker" id="picker" aria-label="选择规则集"></select>
+
+      <fieldset class="filter" id="type-filters">
+        <legend class="visually-hidden">按类型筛选</legend>
+        <div class="filter-options">
+          <input class="visually-hidden" type="radio" name="set-type" id="type-all" value="" checked>
+          <label for="type-all">全部</label>
+          <input class="visually-hidden" type="radio" name="set-type" id="type-domain" value="domain">
+          <label for="type-domain">domain</label>
+          <input class="visually-hidden" type="radio" name="set-type" id="type-classical" value="classical">
+          <label for="type-classical">classical</label>
+          <input class="visually-hidden" type="radio" name="set-type" id="type-ipcidr" value="ipcidr">
+          <label for="type-ipcidr">ipcidr</label>
+        </div>
+      </fieldset>
+
+      <nav class="set-list" id="set-list" aria-label="规则集列表"></nav>
+      <div class="set-state" id="set-state"></div>
+    </aside>
+
+    <!-- 右栏：选中规则集的规则 -->
+    <main class="detail" id="main" tabindex="-1">
+      <div id="detail-empty"></div>
+
+      <header class="detail-head" id="detail-head" hidden>
+        <div class="detail-heading">
+          <h1 class="detail-title" id="detail-title"></h1>
+          <span class="badge" id="detail-badge"></span>
+        </div>
+        <p class="detail-desc" id="detail-desc"></p>
+        <div class="detail-actions">
+          <button class="btn btn-sm btn-secondary" id="btn-sub" type="button" data-icon="link">订阅链接</button>
+          <button class="btn btn-sm btn-ghost" id="btn-set-desc" type="button">改描述</button>
+          <button class="btn btn-sm btn-ghost" id="btn-rename" type="button">重命名</button>
+          <button class="btn btn-sm btn-ghost btn-danger-ghost" id="btn-del-set" type="button">删除</button>
+        </div>
+      </header>
+
+      <div class="toolbar" id="toolbar" hidden>
+        <div class="search" data-icon="search">
+          <input class="input" id="search" type="search" placeholder="搜索规则值或描述" aria-label="搜索规则值或描述" maxlength="200" autocomplete="off" spellcheck="false">
+        </div>
+        <button class="btn btn-primary" id="btn-batch" type="button" aria-expanded="false" aria-controls="batch" data-icon="plus">批量添加</button>
+      </div>
+
+      <!-- 批量添加面板 -->
+      <section class="batch" id="batch" aria-labelledby="batch-title" hidden>
+        <div class="batch-head">
+          <h2 class="batch-title" id="batch-title">批量添加规则</h2>
+          <button class="btn btn-sm btn-ghost" id="batch-close" type="button">收起</button>
+        </div>
+        <p class="batch-hint" id="batch-hint"></p>
+
+        <div class="editor" id="batch-editor">
+          <div class="gutter" id="batch-gutter" aria-hidden="true"></div>
+          <textarea class="editor-textarea" id="batch-text" rows="8" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="每行一条规则，直接粘贴到这里" aria-describedby="batch-summary"></textarea>
+        </div>
+
+        <div id="batch-feedback"></div>
+
+        <div class="batch-foot">
+          <div class="batch-desc-field">
+            <label class="field-label" for="batch-desc">统一描述<span class="field-optional">可选</span></label>
+            <input class="input" id="batch-desc" type="text" maxlength="500" autocomplete="off">
+          </div>
+          <div class="batch-actions">
+            <button class="btn btn-primary" id="batch-submit" type="button" disabled>添加规则</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 规则表：加载、空、失败等状态显示在表格上方或替换表格 -->
+      <div class="rules-results">
+        <div id="items-region">
+          <p class="table-status" id="table-status" role="status" hidden><span class="spinner" aria-hidden="true"></span>正在加载…</p>
+          <table class="rule-table" id="rule-table" hidden>
+            <caption class="visually-hidden">规则列表</caption>
+            <thead>
+              <tr>
+                <th class="col-value" scope="col">规则值</th>
+                <th scope="col">描述</th>
+                <th class="col-actions" scope="col">操作</th>
+              </tr>
+            </thead>
+            <tbody id="rule-body"></tbody>
+          </table>
+          <div id="items-state"></div>
+        </div>
+        <nav class="pager" id="pager" aria-label="规则分页" hidden></nav>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 对话框。表单用 method="dialog"：即使脚本没有拦截，原生提交也只会关闭对话框，不会发出请求 -->
+<dialog class="dialog" id="dlg-create" aria-labelledby="dlg-create-title">
+  <form class="dialog-form" method="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 class="dialog-title" id="dlg-create-title">新建规则集</h2>
+      <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+    </div>
+    <div class="dialog-body">
+      <div class="alert" data-alert role="alert" hidden></div>
+      <div class="field">
+        <label class="field-label" for="create-name">名称</label>
+        <input class="input input-mono" id="create-name" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例如 adblock" aria-describedby="create-name-error" autofocus>
+        <p class="field-error" id="create-name-error" hidden></p>
+      </div>
+      <fieldset class="field">
+        <legend class="field-label">类型</legend>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="create-type" id="create-type-domain" value="domain" checked><span><span class="radio-title">domain</span><span class="radio-desc">一行一个域名，支持 +. 和 *. 前缀</span></span></label>
+          <label class="radio-option"><input type="radio" name="create-type" id="create-type-classical" value="classical"><span><span class="radio-title">classical</span><span class="radio-desc">一行一条完整规则，例如 DOMAIN-SUFFIX,example.com</span></span></label>
+          <label class="radio-option"><input type="radio" name="create-type" id="create-type-ipcidr" value="ipcidr"><span><span class="radio-title">ipcidr</span><span class="radio-desc">一行一个网段，例如 1.2.3.0/24</span></span></label>
+        </div>
+        <p class="field-hint">类型创建后不能修改。</p>
+      </fieldset>
+      <div class="field">
+        <label class="field-label" for="create-desc">描述<span class="field-optional">可选</span></label>
+        <textarea class="textarea" id="create-desc" rows="2" maxlength="500" placeholder="这个规则集用来做什么"></textarea>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">创建</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-rename" aria-labelledby="dlg-rename-title">
+  <form class="dialog-form" method="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 class="dialog-title" id="dlg-rename-title">重命名规则集</h2>
+      <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+    </div>
+    <div class="dialog-body">
+      <div class="alert" data-alert role="alert" hidden></div>
+      <div class="field">
+        <label class="field-label" for="rename-name">新名称</label>
+        <input class="input input-mono" id="rename-name" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="rename-error rename-hint" autofocus>
+        <p class="field-error" id="rename-error" hidden></p>
+        <p class="field-hint" id="rename-hint">重命名后订阅链接会跟着变化，记得更新 mihomo 配置里对应的地址。</p>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-set-desc" aria-labelledby="dlg-set-desc-title">
+  <form class="dialog-form" method="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 class="dialog-title" id="dlg-set-desc-title">修改描述</h2>
+      <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+    </div>
+    <div class="dialog-body">
+      <div class="alert" data-alert role="alert" hidden></div>
+      <div class="field">
+        <label class="field-label" for="set-desc-input">描述</label>
+        <textarea class="textarea" id="set-desc-input" rows="4" maxlength="500" aria-describedby="set-desc-hint" autofocus></textarea>
+        <div class="field-foot">
+          <span class="field-hint" id="set-desc-hint">留空表示不写描述。</span>
+          <span class="field-hint field-count" id="set-desc-count">0 / 500</span>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" type="button" data-close>取消</button>
+      <button class="btn btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="dlg-del-set" aria-labelledby="dlg-del-set-title" aria-describedby="dlg-del-set-text">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="dlg-del-set-title">删除规则集？</h2>
+    <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+  </div>
+  <div class="dialog-body">
+    <div class="alert" data-alert role="alert" hidden></div>
+    <p class="dialog-text" id="dlg-del-set-text"></p>
+  </div>
+  <div class="dialog-foot">
+    <button class="btn" type="button" data-close autofocus>取消</button>
+    <button class="btn btn-danger" type="button" id="del-set-confirm">删除规则集</button>
+  </div>
+</dialog>
+
+<dialog class="dialog" id="dlg-del-rule" aria-labelledby="dlg-del-rule-title" aria-describedby="dlg-del-rule-text">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="dlg-del-rule-title">删除这条规则？</h2>
+    <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+  </div>
+  <div class="dialog-body">
+    <div class="alert" data-alert role="alert" hidden></div>
+    <p class="dialog-text" id="dlg-del-rule-text">将从规则集中删除：</p>
+    <div class="rule-preview">
+      <code id="del-rule-value"></code>
+      <span class="rule-preview-desc" id="del-rule-desc"></span>
+    </div>
+  </div>
+  <div class="dialog-foot">
+    <button class="btn" type="button" data-close autofocus>取消</button>
+    <button class="btn btn-danger" type="button" id="del-rule-confirm">删除</button>
+  </div>
+</dialog>
+
+<dialog class="dialog dialog-lg" id="dlg-sub" aria-labelledby="dlg-sub-title">
+  <div class="dialog-head">
+    <h2 class="dialog-title" id="dlg-sub-title">订阅链接</h2>
+    <button class="btn btn-sm btn-ghost btn-icon" type="button" data-close data-icon="close" aria-label="关闭"></button>
+  </div>
+  <div class="dialog-body">
+    <div class="alert" data-alert role="alert" hidden></div>
+    <div class="field">
+      <label class="field-label" for="sub-url">订阅地址</label>
+      <textarea class="textarea textarea-mono link-input" id="sub-url" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off" autofocus></textarea>
+      <p class="field-hint">填进 mihomo 的 rule-providers，behavior 写这个规则集的类型。地址不对可以直接改，复制的是输入框里当前的内容。</p>
+    </div>
+    <div class="alert"><span data-icon="info"></span><p>链接里带有查看令牌，拿到链接的人都能读取规则内容，不要公开分享。</p></div>
+  </div>
+  <div class="dialog-foot">
+    <button class="btn" type="button" data-close>关闭</button>
+    <button class="btn btn-primary" type="button" id="sub-action" data-icon="copy">复制链接</button>
+  </div>
+</dialog>
+
+<!-- 提示浮层的容器放在应用根元素之外：根元素是容器查询的容器，会成为固定定位后代的包含块 -->
+<div class="toast-region" id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>

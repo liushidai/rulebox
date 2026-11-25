@@ -4,7 +4,7 @@
  */
 
 import { Elysia, t, status } from 'elysia';
-import type { ConfigStore } from '../lib/store';
+import { DEFAULT_PAGE_SIZE, type ConfigStore } from '../lib/store';
 import type { createAuth } from './auth';
 import type { ConfigType } from '../lib/index';
 import { validateItem } from '../lib/validator';
@@ -16,6 +16,9 @@ import {
   RenameConfigBody,
   UpdateDescriptionBody,
   ItemsBody,
+  ItemsQuery,
+  DeleteItemsResponse,
+  SubscriptionResponse,
   ConfigNamePattern,
 } from '../schema';
 import { CONFIG_TYPES } from '../lib/index';
@@ -23,12 +26,26 @@ import { CONFIG_TYPES } from '../lib/index';
 interface Props {
   store: ConfigStore;
   auth: ReturnType<typeof createAuth>;
+  /** VIEW_TOKEN，用于拼装订阅链接 */
+  viewToken: string;
 }
 
 // 配置名参数 schema
 const NameParam = t.Object({
   name: t.String({ pattern: ConfigNamePattern.source }),
 });
+
+/**
+ * 安全读取配置条数：index.yaml 中若残留非法名称，
+ * countItems 会抛 INVALID_CONFIG_NAME，此处降级为 0，避免整个列表 500
+ */
+function countItemsSafely(store: ConfigStore, name: string): number {
+  try {
+    return store.countItems(name);
+  } catch {
+    return 0;
+  }
+}
 
 // 查询参数 schema
 const ListQuery = t.Object({
@@ -39,21 +56,26 @@ const ListQuery = t.Object({
   ),
 });
 
-export function createConfigsModule({ store, auth }: Props) {
+export function createConfigsModule({ store, auth, viewToken }: Props) {
   return new Elysia({ name: 'configs-routes', prefix: '/api/configs' })
     .guard({
       beforeHandle: auth.adminCheck as any,
     })
 
-    // GET /api/configs - 列表（支持 ?type= 筛选）
+    // GET /api/configs - 列表（支持 ?type= 筛选，每项附带 item_count）
     .get(
       '/',
       ({ query }) => {
-        if (query.type) {
-          const entries = store.filterByType(query.type as ConfigType);
-          return { configs: entries };
-        }
-        return { configs: store.listEntries() };
+        const entries = query.type
+          ? store.filterByType(query.type as ConfigType)
+          : store.listEntries();
+        return {
+          configs: entries.map((entry) => ({
+            ...entry,
+            // index.yaml 中残留非法名称时按 0 处理，避免整个列表失败
+            item_count: countItemsSafely(store, entry.name),
+          })),
+        };
       },
       {
         query: ListQuery,
@@ -173,10 +195,10 @@ export function createConfigsModule({ store, auth }: Props) {
       },
     )
 
-    // GET /api/configs/{name}/items - 获取数据项（含元数据）
+    // GET /api/configs/{name}/items - 获取数据项（支持分页与关键字搜索）
     .get(
       '/:name/items',
-      ({ params: { name } }) => {
+      ({ params: { name }, query }) => {
         const entry = store.getEntry(name);
         if (!entry) {
           return status(404, {
@@ -185,17 +207,35 @@ export function createConfigsModule({ store, auth }: Props) {
           });
         }
 
-        const items = store.getConfig(name) || [];
-        return {
+        const { items, total } = store.queryItems(name, {
+          page: query.page,
+          pageSize: query.pageSize,
+          q: query.q,
+        });
+
+        const base = {
           name: entry.name,
           type: entry.type,
           description: entry.description,
           created_at: entry.created_at,
           items,
+          total,
+        };
+
+        // 不传 page 时保持向后兼容：响应不含 page 与 pageSize
+        if (query.page === undefined) {
+          return base;
+        }
+
+        return {
+          ...base,
+          page: query.page,
+          pageSize: query.pageSize ?? DEFAULT_PAGE_SIZE,
         };
       },
       {
         params: NameParam,
+        query: ItemsQuery,
         response: {
           200: ConfigItemsResponse,
           404: t.Object({ error: t.String(), code: t.String() }),
@@ -277,14 +317,15 @@ export function createConfigsModule({ store, auth }: Props) {
       },
     )
 
-    // DELETE /api/configs/{name}/items - 删除数据项
+    // DELETE /api/configs/{name}/items - 删除数据项（返回实际删除条数）
     .delete(
       '/:name/items',
       async ({ params: { name }, body: { items } }) => {
         try {
-          const itemsArray: string[] = items.map(item => item.value);
-          await store.removeItems(name, itemsArray);
-          return { removed: itemsArray.length, from: name };
+          const itemsArray: string[] = items.map((item) => item.value);
+          // removed 为实际删除条数，请求中重复或不存在的 value 不计入
+          const removed = await store.removeItems(name, itemsArray);
+          return { removed, from: name };
         } catch (err: any) {
           if (err.message === 'CONFIG_NOT_FOUND') {
             return status(404, {
@@ -298,6 +339,40 @@ export function createConfigsModule({ store, auth }: Props) {
       {
         params: NameParam,
         body: ItemsBody,
+        response: {
+          200: DeleteItemsResponse,
+          404: t.Object({ error: t.String(), code: t.String() }),
+        },
+      },
+    )
+
+    // GET /api/configs/{name}/subscription - 获取订阅链接（根相对地址，带 VIEW_TOKEN）
+    .get(
+      '/:name/subscription',
+      ({ params: { name }, set }) => {
+        const entry = store.getEntry(name);
+        if (!entry) {
+          return status(404, {
+            error: 'config not found',
+            code: 'CONFIG_NOT_FOUND',
+          });
+        }
+
+        // 订阅链接含 VIEW_TOKEN，禁止中间层缓存
+        set.headers['cache-control'] = 'no-store';
+
+        // 后端不知道自己的公网地址，故返回根相对地址，由前端拼接 location.origin
+        return {
+          name: entry.name,
+          url: `/${entry.name}.yaml?token=${encodeURIComponent(viewToken)}`,
+        };
+      },
+      {
+        params: NameParam,
+        response: {
+          200: SubscriptionResponse,
+          404: t.Object({ error: t.String(), code: t.String() }),
+        },
       },
     );
 }
