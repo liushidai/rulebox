@@ -17,53 +17,55 @@ RuleBox 托管 mihomo/Clash 规则订阅。可以在浏览器中管理规则集�
 
 ## 🚀 快速开始
 
-### 前提条件
+### 使用 GHCR 镜像部署
 
-- [Bun](https://bun.sh/) 运行时
-- 或使用 Docker Compose
+部署服务器只需要 Docker 和 Docker Compose，不必克隆源码。从 [GitHub Packages](https://github.com/liushidai/rulebox/pkgs/container/rulebox) 选择一个已发布的镜像标签，然后在同一个目录创建 `.env` 和 `compose.yaml`。
 
-用 `openssl rand -hex 32` 分别生成两个不同的随机值，填入 `.env` 的 `ADMIN_TOKEN` 和 `VIEW_TOKEN`。前者用于管理，后者只用于拉取订阅。
+`.env`（将示例镜像地址替换为实际发布的地址，并用 `openssl rand -hex 32` 分别生成两个不同的令牌）：
 
-### 本地开发
-
-```bash
-# 克隆仓库
-git clone https://github.com/liushidai/rulebox.git
-cd rulebox
-
-# 安装依赖
-bun install
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件，设置 VIEW_TOKEN 和 ADMIN_TOKEN
-
-# 启动服务
-bun run src/index.ts
+```dotenv
+RULEBOX_IMAGE=ghcr.io/liushidai/rulebox:20261126-1435-42-1
+ADMIN_TOKEN=替换为管理令牌
+VIEW_TOKEN=替换为订阅令牌
 ```
 
-### Docker Compose 部署
+`compose.yaml`：
+
+```yaml
+services:
+  rulebox:
+    image: ${RULEBOX_IMAGE:?请填写镜像地址}
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?请填写管理令牌}
+      VIEW_TOKEN: ${VIEW_TOKEN:?请填写订阅令牌}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+```
 
 ```bash
-# 克隆仓库
-git clone https://github.com/liushidai/rulebox.git
-cd rulebox
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 文件，至少设置以下变量：
-#   VIEW_TOKEN=your-view-token
-#   ADMIN_TOKEN=your-admin-token
-#   PORT=8080
-
-# 启动服务
+docker compose pull
 docker compose up -d
 ```
 
-服务启动后：
-- Web 管理：打开 `http://localhost:8080/`，粘贴 `ADMIN_TOKEN` 登录。
-- 健康检查：`http://localhost:8080/health`。
-- Swagger 文档：启用 `ENABLE_SWAGGER` 后可访问 `/swagger`。
+启动后打开 `http://localhost:8080/`，输入管理令牌登录。健康检查地址是 `http://localhost:8080/health`。
+
+公开镜像可直接拉取；私有镜像需先用有读取权限的账号和带 `read:packages` 权限的 GitHub 个人访问令牌登录 `ghcr.io`。升级或回滚时，改 `.env` 里的 `RULEBOX_IMAGE` 后重新执行上面两条命令；保留 `./data`，不要删除数据目录。
+
+### 本地开发
+
+需要 [Bun](https://bun.sh/)。仓库自带的 `docker-compose.yml` 仍用于从源码构建，不会拉取 GHCR 镜像。
+
+```bash
+git clone https://github.com/liushidai/rulebox.git
+cd rulebox
+bun install
+cp .env.example .env
+# 编辑 .env，分别设置管理令牌和订阅令牌
+bun run src/index.ts
+```
 
 ---
 
@@ -117,8 +119,8 @@ docker compose up -d
 | `VIEW_TOKEN`      | 查看 YAML 配置的 Token         | 是   |
 | `ADMIN_TOKEN`     | 管理配置的 Token               | 是   |
 | `PORT`            | 服务端口（默认 8080）          | 否   |
-| `DATA_DIR`        | 数据存储目录（默认 ./data）    | 否   |
-| `ENABLE_SWAGGER`  | 是否启用 Swagger 文档（默认 false） | 否   |
+| `DATA_DIR`        | 数据存储目录（默认 `/data`，本地开发示例设为 `./data`） | 否   |
+| `ENABLE_SWAGGER`  | 设为 `true` 时启用 `/swagger`（默认关闭） | 否   |
 | `TRUST_PROXY`     | 设为 `true` 时采用 `X-Forwarded-For` 最后一项作为限流地址（默认 false） | 否 |
 
 仅当服务位于单层反向代理后、无法被客户端绕过代理直接访问，且代理会正确写入 `X-Forwarded-For` 的最后一项时，才开启 `TRUST_PROXY`。直连或不确定代理行为时保持默认值。
@@ -148,5 +150,5 @@ curl -X POST http://localhost:8080/api/configs/adblock/items \
 ### 获取 YAML 配置（mihomo 兼容）
 
 ```bash
-curl http://localhost:8080/adblock.yaml?token=$VIEW_TOKEN
+curl --get http://localhost:8080/adblock.yaml --data-urlencode "token=$VIEW_TOKEN"
 ```
