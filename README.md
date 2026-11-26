@@ -19,12 +19,11 @@ RuleBox 托管 mihomo/Clash 规则订阅。可以在浏览器中管理规则集�
 
 ### 使用 GHCR 镜像部署
 
-部署服务器只需要 Docker 和 Docker Compose，不必克隆源码。从 [GitHub Packages](https://github.com/liushidai/rulebox/pkgs/container/rulebox) 选择一个已发布的镜像标签，然后在同一个目录创建 `.env` 和 `compose.yaml`。
+在同一目录创建 `.env` 和 `compose.yaml`。支持 Linux amd64 和 arm64。
 
-`.env`（将示例镜像地址替换为实际发布的地址，并用 `openssl rand -hex 32` 分别生成两个不同的令牌）：
+`.env`（用 `openssl rand -hex 32` 分别生成两个不同的令牌）：
 
 ```dotenv
-RULEBOX_IMAGE=ghcr.io/liushidai/rulebox:20261126-1435-42-1
 ADMIN_TOKEN=替换为管理令牌
 VIEW_TOKEN=替换为订阅令牌
 ```
@@ -34,7 +33,7 @@ VIEW_TOKEN=替换为订阅令牌
 ```yaml
 services:
   rulebox:
-    image: ${RULEBOX_IMAGE:?请填写镜像地址}
+    image: ghcr.io/liushidai/rulebox:latest
     ports:
       - "8080:8080"
     environment:
@@ -52,7 +51,7 @@ docker compose up -d
 
 启动后打开 `http://localhost:8080/`，输入管理令牌登录。健康检查地址是 `http://localhost:8080/health`。
 
-公开镜像可直接拉取；私有镜像需先用有读取权限的账号和带 `read:packages` 权限的 GitHub 个人访问令牌登录 `ghcr.io`。升级或回滚时，改 `.env` 里的 `RULEBOX_IMAGE` 后重新执行上面两条命令；保留 `./data`，不要删除数据目录。
+升级时重新执行上面两条命令即可。保留 `./data`，不要删除数据目录。
 
 ### 本地开发
 
